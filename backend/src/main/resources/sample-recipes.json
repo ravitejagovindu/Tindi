@@ -1,0 +1,18 @@
+[
+  {"name":"Paneer Butter Masala",
+   "ingredients":[{"quantity":"250 g","item":"paneer, cubed"},{"quantity":"2 tbsp","item":"butter"},{"quantity":"3","item":"tomatoes, pureed"},{"quantity":"1","item":"onion, chopped"},{"quantity":"1/2 cup","item":"cream"},{"quantity":"1 tsp","item":"garam masala"}],
+   "steps":["Melt 2 tbsp butter in a pan.","Add the chopped onion and cook until golden.","Pour in the tomato puree and simmer for 8 minutes.","Stir in the cream and garam masala.","Add the paneer and cook for 3 minutes. Serve hot."],
+   "categories":["Dinner"],"sourceUrl":"https://www.youtube.com/watch?v=tindiSample01"},
+  {"name":"Masala Oats",
+   "ingredients":[{"quantity":"1 cup","item":"rolled oats"},{"quantity":"1","item":"onion, chopped"},{"quantity":"1","item":"tomato, chopped"},{"quantity":"1/2 cup","item":"green peas"},{"quantity":"1 tsp","item":"turmeric"},{"quantity":"2 cups","item":"water"}],
+   "steps":["Dry roast the oats for 2 minutes and set aside.","Saute the onion and tomato in a little oil.","Add the peas and turmeric and stir well.","Pour in the water and bring it to a boil.","Add the oats and cook for 3 minutes until thick."],
+   "categories":["Breakfast","Healthy"],"sourceUrl":"https://www.youtube.com/watch?v=tindiSample02"},
+  {"name":"Sprouts Chaat",
+   "ingredients":[{"quantity":"2 cups","item":"boiled sprouts"},{"quantity":"1","item":"onion, chopped"},{"quantity":"1","item":"tomato, chopped"},{"quantity":"1 tsp","item":"chaat masala"},{"quantity":"1 tbsp","item":"lemon juice"},{"quantity":"2 tbsp","item":"coriander, chopped"}],
+   "steps":["Add the boiled sprouts to a large bowl.","Mix in the onion and tomato.","Sprinkle the chaat masala over the top.","Squeeze in the lemon juice and toss.","Garnish with coriander and serve at once."],
+   "categories":["Snacks","Protein","Healthy"],"sourceUrl":"https://www.youtube.com/watch?v=tindiSample03"},
+  {"name":"Dal Tadka",
+   "ingredients":[{"quantity":"1 cup","item":"toor dal"},{"quantity":"3 cups","item":"water"},{"quantity":"1 tsp","item":"turmeric"},{"quantity":"2 tbsp","item":"ghee"},{"quantity":"1 tsp","item":"cumin seeds"},{"quantity":"4","item":"garlic cloves, sliced"}],
+   "steps":["Pressure cook the dal with water and turmeric for 4 whistles.","Mash the cooked dal lightly and keep it warm.","Heat the ghee and crackle the cumin seeds.","Add the garlic and fry until golden.","Pour the tadka over the dal and mix."],
+   "categories":["Lunch","Dinner"],"sourceUrl":"https://www.youtube.com/watch?v=tindiSample04"}
+]

@@ -1,0 +1,7 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+Tindi_Design_System.zip
+.kotlin/

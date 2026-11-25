@@ -1,0 +1,14 @@
+# Copy to config/local.properties (gitignored) and fill in. Never commit secrets.
+spring.datasource.url=jdbc:mysql://localhost:3306/tindi?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+spring.datasource.username=tindi_app
+spring.datasource.password=CHANGE_ME
+
+# Used only by the integration tests (must be the tindi_test schema)
+tindi.test-db-url=jdbc:mysql://localhost:3306/tindi_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+
+server.port=7000
+# 0.0.0.0 = reachable over Tailscale and LAN; use 127.0.0.1 for this machine only
+server.address=0.0.0.0
+
+# Give every new account 4 sample recipes
+tindi.seed-sample-recipes=false

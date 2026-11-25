@@ -1,0 +1,5 @@
+target/
+config/local.properties
+config/setup.sql
+.idea/
+*.iml
