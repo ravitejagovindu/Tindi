@@ -12,3 +12,7 @@ server.address=0.0.0.0
 
 # Give every new account 4 sample recipes
 tindi.seed-sample-recipes=false
+
+# YouTube Data API v3 key for POST /api/v1/source/fetch (get one in Google Cloud Console).
+# Leave the placeholder to keep the fetch endpoint switched off (SOURCE_NOT_CONFIGURED).
+tindi.youtube-api-key=PASTE_YOUR_YOUTUBE_API_KEY_HERE

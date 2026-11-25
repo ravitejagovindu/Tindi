@@ -28,6 +28,7 @@ Every error has this shape (`fields` only when relevant):
 | 409 | `EMAIL_TAKEN` | `fields.email` |
 | 409 | `CATEGORY_NAME_TAKEN` | `fields.name` |
 | 405 / 500 | `METHOD_NOT_ALLOWED` / `INTERNAL_ERROR` | unexpected |
+| 404/429/502/503 | `NOT_FOUND`, `SOURCE_QUOTA_EXCEEDED`, `SOURCE_UNAVAILABLE`, `SOURCE_NOT_CONFIGURED` | only from `POST /source/fetch`, see below |
 
 A malformed body or a bad enum value (e.g. `sourceType`) is `VALIDATION_FAILED`; `fields` may name the path with the message `Invalid value`.
 
@@ -135,3 +136,64 @@ Full replace, same body as POST. `createdAt` is kept, `updatedAt` changes. Error
 
 ### DELETE /recipes/{id} -> 204
 Errors: 404.
+
+## Source fetch (YouTube)
+
+Needs `Authorization: Bearer <token>`. Uses the official YouTube Data API v3 on the server, with the key from `tindi.youtube-api-key`. The phone never sees the key. Nothing is saved: the app shows the result in the review screen, and the user then saves with `POST /recipes`.
+
+### POST /source/fetch -> 200
+```json
+{"url":"https://youtu.be/dQw4w9WgXcQ"}
+```
+Accepted links: `youtube.com/watch?v=ID` (also `www.` and `m.`), `youtu.be/ID`, `youtube.com/shorts/ID`. The scheme may be left out. Extra query parameters are ignored. Anything else (Instagram, other sites, channel or playlist pages) is rejected before YouTube is called.
+
+```json
+{
+  "title": "Paneer Butter Masala",
+  "channelName": "Tindi Test Kitchen",
+  "thumbnailUrl": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+  "sourceUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "sourceType": "YOUTUBE",
+  "description": "Creamy paneer butter masala.\n\nIngredients:\n- 250 g paneer ...",
+  "comments": [
+    {"author": "Tindi Test Kitchen", "text": "Pinned: use kasuri methi", "likeCount": 120, "isPinnedLikely": true},
+    {"author": "A Fan", "text": "Made this last night!", "likeCount": 7, "isPinnedLikely": false}
+  ],
+  "suggested": {
+    "ingredients": ["250 g paneer", "2 tbsp butter"],
+    "steps": ["Melt the butter.", "Add the puree and simmer."],
+    "confidence": "HIGH",
+    "foundIn": "DESCRIPTION"
+  }
+}
+```
+- `sourceUrl` is the canonical `https://www.youtube.com/watch?v=ID`. Send it back as `sourceUrl` when creating the recipe, with `sourceType` `YOUTUBE`.
+- `thumbnailUrl` is the largest thumbnail YouTube offers, or `null`.
+- `comments` holds up to 5 top comments by relevance (plain text). It is `[]` when comments are disabled or YouTube fails to return them; the request still succeeds. `isPinnedLikely` is a guess: the YouTube API does not say which comment is pinned, so it is `true` when the comment was written by the video's own channel.
+- `description` and `comments` are always returned raw, whatever `suggested` says.
+
+`suggested` comes from a rule based splitter (no AI). It looks for an "ingredients" section ("Ingredients", "What you need", "You will need", "Samagri", "सामग्री") and a method section ("Method", "Steps", "Directions", "Instructions", "Preparation", "Vidhi", "विधि") in the description first, then in each comment, and keeps the one with the most lines. Bullets, numbering and emoji are removed. Items are trimmed to the recipe limits (ingredient 120, step 1000 characters, 100 items).
+
+| `confidence` | meaning |
+|---|---|
+| `HIGH` | at least 2 ingredients and 2 steps found |
+| `LOW` | something found, but only one section or very few lines. Show it, but let the user check it |
+| `NONE` | nothing found. `ingredients` and `steps` are `[]` and `foundIn` is `NONE` |
+
+`foundIn` is `DESCRIPTION`, `COMMENT` or `NONE`. Treat the suggestion as a prefill, not as truth: always let the user edit before saving.
+
+Errors (same error format as everywhere):
+
+| HTTP | code | when |
+|---|---|---|
+| 400 | `VALIDATION_FAILED` | blank or missing `url`, or not a supported YouTube link. `fields.url` says: "Only YouTube links can be fetched. Paste Instagram and other links as text instead." |
+| 401 | `UNAUTHORIZED` | missing or revoked token |
+| 404 | `NOT_FOUND` | video does not exist or is private |
+| 429 | `SOURCE_QUOTA_EXCEEDED` | the server's daily YouTube quota is used up. Offer to paste text instead |
+| 502 | `SOURCE_UNAVAILABLE` | YouTube failed, timed out or answered something unexpected (5 s timeout, no retries) |
+| 503 | `SOURCE_NOT_CONFIGURED` | no YouTube key on the server. The rest of the API works normally |
+
+A bad link is checked first, so it returns `VALIDATION_FAILED` even when the key is missing.
+
+### Server setup
+In `backend/config/local.properties` (gitignored) add `tindi.youtube-api-key=<your key>` and restart the server. The key is sent to Google in the `X-Goog-Api-Key` header and is never logged or returned. A value that starts with `PASTE` (the placeholder in `local.properties.example`) counts as not set.

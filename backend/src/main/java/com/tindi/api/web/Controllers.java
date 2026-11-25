@@ -8,11 +8,14 @@ import com.tindi.api.dto.CategoryDtos.CategoryDto;
 import com.tindi.api.dto.CategoryDtos.CategoryRequest;
 import com.tindi.api.dto.RecipeDtos.RecipeDto;
 import com.tindi.api.dto.RecipeDtos.RecipeRequest;
+import com.tindi.api.dto.SourceDtos.FetchRequest;
+import com.tindi.api.dto.SourceDtos.FetchResponse;
 import com.tindi.api.security.AuthUser;
 import com.tindi.api.security.TokenService;
 import com.tindi.api.service.AuthService;
 import com.tindi.api.service.CategoryService;
 import com.tindi.api.service.RecipeService;
+import com.tindi.api.service.SourceService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -149,6 +152,21 @@ public final class Controllers {
         @ResponseStatus(HttpStatus.NO_CONTENT)
         public void delete(@AuthenticationPrincipal AuthUser user, @PathVariable String id) {
             service.delete(user.userId(), id);
+        }
+    }
+
+    @RestController
+    @RequestMapping("/api/v1/source")
+    public static class Source {
+        private final SourceService service;
+
+        public Source(SourceService service) {
+            this.service = service;
+        }
+
+        @PostMapping("/fetch")
+        public FetchResponse fetch(@Valid @RequestBody FetchRequest req) {
+            return service.fetch(req.url());
         }
     }
 }
