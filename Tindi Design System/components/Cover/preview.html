@@ -1,0 +1,25 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html,body{margin:0}body{background:var(--bg);color:var(--ink);width:960px;height:288px;position:relative;overflow:hidden;font-family:var(--font-sans)}
+svg{position:absolute;left:480px;top:0}
+.a{fill:var(--accent)}.m{fill:var(--mango)}.i{fill:var(--ink)}.t{fill:var(--tile-1)}.p{fill:var(--plate)}.q{fill:var(--plate-inner)}.d{fill:var(--on-accent)}.s{rx:var(--radius-card)}
+.txt{position:absolute;left:40px;bottom:28px;width:420px}
+h1{margin:0;font-family:var(--font-display);font-weight:800;font-size:120px;line-height:.95;letter-spacing:-.02em}
+p{margin:10px 0 0;font-size:14px;color:var(--muted)}
+</style></head><body>
+<svg width="480" height="288" viewBox="0 0 480 288">
+<!-- blocks: accent 192x168, mango 224x120, ink 240x104, tile-1 176x112 -->
+<!-- arrangement: staggered stack, accent and ink bleed off the top and bottom edges -->
+<!-- pattern: plate discs, because the app is a recipe shelf and the radius scale is soft and round -->
+<!-- steps: 8 and 24 grid, radius-card 22, discs at half the short side -->
+<rect class="a s" x="24" y="-30" width="192" height="198"/>
+<rect class="m s" x="232" y="40" width="224" height="120"/>
+<rect class="i s" x="24" y="184" width="240" height="134"/>
+<rect class="t s" x="280" y="176" width="176" height="112"/>
+<circle class="p" cx="120" cy="84" r="52"/><circle class="q" cx="120" cy="84" r="38"/><circle class="a" cx="108" cy="78" r="9"/><circle class="m" cx="130" cy="90" r="7"/>
+<circle class="d" cx="312" cy="100" r="16"/><circle class="d" cx="368" cy="100" r="16"/><circle class="d" cx="424" cy="100" r="16"/>
+<circle class="p" cx="368" cy="232" r="40"/><circle class="q" cx="368" cy="232" r="28"/>
+</svg>
+<div class="txt"><h1>Tindi</h1><p>Turn cooking videos into your own recipe book.</p></div>
+</body></html>
