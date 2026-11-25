@@ -30,7 +30,10 @@ import com.tindi.app.AppContainer
 import com.tindi.app.ui.components.BottomNav
 import com.tindi.app.ui.components.NavItem
 import com.tindi.app.ui.screens.AuthScreen
+import com.tindi.app.ui.screens.AddRecipeScreen
+import com.tindi.app.ui.screens.CategoriesScreen
 import com.tindi.app.ui.screens.CookingScreen
+import com.tindi.app.ui.screens.ReviewScreen
 import com.tindi.app.ui.screens.LibraryScreen
 import com.tindi.app.ui.screens.ProfileScreen
 import com.tindi.app.ui.screens.RecipeScreen
@@ -130,12 +133,18 @@ private fun AppNavHost(nav: NavHostController, container: AppContainer) {
                 onFinish = { nav.popBackStack(Routes.LIBRARY, inclusive = false) },
             )
         }
-        composable(Routes.CATEGORIES) { PlaceholderScreen("Categories") }
+        composable(Routes.CATEGORIES) { CategoriesScreen(container) }
+        composable(Routes.ADD) {
+            AddRecipeScreen(container, onBack = { nav.popBackStack() }, onUseText = { nav.navigate(Routes.REVIEW) })
+        }
+        composable(Routes.REVIEW) {
+            ReviewScreen(
+                container,
+                onBack = { nav.popBackStack() },
+                onSaved = { nav.popBackStack(Routes.LIBRARY, inclusive = false) },
+            )
+        }
         composable(Routes.PROFILE) { ProfileScreen(container) }
     }
 }
 
-@Composable
-private fun PlaceholderScreen(title: String) {
-    androidx.compose.material3.Text(title, color = Tindi.colors.ink)
-}
