@@ -30,7 +30,10 @@ import com.tindi.app.AppContainer
 import com.tindi.app.ui.components.BottomNav
 import com.tindi.app.ui.components.NavItem
 import com.tindi.app.ui.screens.AuthScreen
+import com.tindi.app.ui.screens.CookingScreen
+import com.tindi.app.ui.screens.LibraryScreen
 import com.tindi.app.ui.screens.ProfileScreen
+import com.tindi.app.ui.screens.RecipeScreen
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.ThemeControl
 import com.tindi.app.ui.theme.LocalThemeControl
@@ -112,7 +115,21 @@ private fun NavHostController.switchTab(item: NavItem) {
 @Composable
 private fun AppNavHost(nav: NavHostController, container: AppContainer) {
     NavHost(navController = nav, startDestination = Routes.LIBRARY) {
-        composable(Routes.LIBRARY) { PlaceholderScreen("Library") }
+        composable(Routes.LIBRARY) {
+            LibraryScreen(container, onOpenRecipe = { nav.navigate(Routes.recipe(it)) }, onAdd = { nav.navigate(Routes.ADD) })
+        }
+        composable(Routes.RECIPE) { e ->
+            val id = e.arguments?.getString("id").orEmpty()
+            RecipeScreen(container, id, onBack = { nav.popBackStack() }, onStartCooking = { nav.navigate(Routes.cook(id)) })
+        }
+        composable(Routes.COOK) { e ->
+            val id = e.arguments?.getString("id").orEmpty()
+            CookingScreen(
+                container, id,
+                onClose = { nav.popBackStack() },
+                onFinish = { nav.popBackStack(Routes.LIBRARY, inclusive = false) },
+            )
+        }
         composable(Routes.CATEGORIES) { PlaceholderScreen("Categories") }
         composable(Routes.PROFILE) { ProfileScreen(container) }
     }
