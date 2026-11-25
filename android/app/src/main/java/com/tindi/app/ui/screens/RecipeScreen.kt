@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -43,52 +44,137 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tindi.app.AppContainer
 import com.tindi.app.data.Categories
+import com.tindi.app.data.remote.ApiResult
 import com.tindi.app.data.Recipe
 import com.tindi.app.data.SourceType
+import com.tindi.app.ui.components.DangerButton
+import com.tindi.app.ui.components.ErrorLine
+import com.tindi.app.ui.components.ErrorState
 import com.tindi.app.ui.components.Heading
 import com.tindi.app.ui.components.IconBtn
 import com.tindi.app.ui.components.PlateIllustration
 import com.tindi.app.ui.components.PrimaryButton
+import com.tindi.app.ui.components.SecondaryButton
+import com.tindi.app.ui.components.Skeleton
 import com.tindi.app.ui.components.SourceBadge
+import com.tindi.app.ui.components.StateBlock
 import com.tindi.app.ui.components.TIcon
 import com.tindi.app.ui.components.TIconImage
 import com.tindi.app.ui.components.ThemeToggle
 import com.tindi.app.ui.components.TindiTabs
+import com.tindi.app.ui.components.TindiSheet
 import com.tindi.app.ui.theme.LocalThemeControl
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.TindiDims
 import com.tindi.app.ui.theme.TindiType
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 data class RecipeUiState(
     val loaded: Boolean = false,
+    val error: String? = null,
     val recipe: Recipe? = null,
     val categoryNames: List<String> = emptyList(),
+    val deleting: Boolean = false,
+    val deleteError: String? = null,
+    /** Set once the server confirmed the delete, so the screen does not flash "not found" while closing. */
+    val deleted: Boolean = false,
 )
 
-class RecipeViewModel(container: AppContainer, id: String) : ViewModel() {
+class RecipeViewModel(private val container: AppContainer, private val id: String) : ViewModel() {
+    private data class Deletion(val busy: Boolean = false, val error: String? = null, val done: Boolean = false)
+
+    private val deletion = MutableStateFlow(Deletion())
+
     val state: StateFlow<RecipeUiState> = combine(
-        container.recipes.loaded, container.recipes.recipes, container.categories.categories,
-    ) { loaded, recipes, categories ->
+        container.recipes.loaded, container.recipes.loadError, container.recipes.recipes,
+        container.categories.categories, deletion,
+    ) { loaded, error, recipes, categories, del ->
         val r = recipes.firstOrNull { it.id == id }
         val names = r?.categoryIds?.mapNotNull { cid -> categories.firstOrNull { it.id == cid }?.name }.orEmpty()
-        RecipeUiState(loaded, r, names.ifEmpty { listOf(Categories.UNCATEGORISED_NAME) })
+        RecipeUiState(
+            loaded = loaded, error = error, recipe = r,
+            categoryNames = names.ifEmpty { listOf(Categories.UNCATEGORISED_NAME) },
+            deleting = del.busy, deleteError = del.error, deleted = del.done,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecipeUiState())
+
+    init { reload() }
+
+    /** First open loads everything. Later opens just refresh this one recipe. */
+    fun reload() {
+        viewModelScope.launch {
+            if (container.recipes.loaded.first()) container.recipes.get(id) else {
+                launch { container.categories.refresh() }
+                container.recipes.refresh()
+            }
+        }
+    }
+
+    fun delete(onDeleted: () -> Unit) {
+        if (deletion.value.busy) return
+        deletion.value = Deletion(busy = true)
+        viewModelScope.launch {
+            when (val r = container.recipes.delete(id)) {
+                is ApiResult.Ok -> { deletion.value = Deletion(done = true); onDeleted() }
+                is ApiResult.Fail ->
+                    if (r.error.code == "NOT_FOUND") { deletion.value = Deletion(done = true); onDeleted() }
+                    else deletion.value = Deletion(error = r.error.message)
+            }
+        }
+    }
+
+    fun clearDeleteError() { deletion.value = Deletion() }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RecipeScreen(container: AppContainer, id: String, onBack: () -> Unit, onStartCooking: () -> Unit) {
+fun RecipeScreen(
+    container: AppContainer,
+    id: String,
+    onBack: () -> Unit,
+    onStartCooking: () -> Unit,
+    onEdit: () -> Unit,
+) {
     val vm = appViewModel(key = "recipe-$id") { RecipeViewModel(container, id) }
     val s by vm.state.collectAsStateWithLifecycle()
     val theme = LocalThemeControl.current
     val c = Tindi.colors
-    val recipe = s.recipe ?: return
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val recipe = s.recipe
+    if (recipe == null) {
+        if (s.deleted) return
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = TindiDims.space5, vertical = TindiDims.space3)) {
+                IconBtn(TIcon.ArrowLeft, "Back", onBack)
+            }
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                when {
+                    s.error != null -> ErrorState(s.error.orEmpty(), vm::reload)
+                    !s.loaded -> Column(Modifier.fillMaxWidth().padding(horizontal = TindiDims.space5)) {
+                        Skeleton(Modifier.fillMaxWidth().height(TindiDims.heroH), RoundedCornerShape(TindiDims.radiusCard))
+                        Spacer(Modifier.height(TindiDims.space4))
+                        Skeleton(Modifier.fillMaxWidth(0.7f).height(24.dp))
+                        Spacer(Modifier.height(TindiDims.space3))
+                        Skeleton(Modifier.fillMaxWidth(0.4f).height(16.dp))
+                    }
+                    else -> StateBlock(
+                        variant = 1,
+                        title = "Recipe not found",
+                        message = "It may have been deleted on another device.",
+                    ) { SecondaryButton("Back to library", onBack) }
+                }
+            }
+        }
+        return
+    }
 
     Column(Modifier.fillMaxSize()) {
         Column(
@@ -108,7 +194,11 @@ fun RecipeScreen(container: AppContainer, id: String, onBack: () -> Unit, onStar
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     IconBtn(TIcon.ArrowLeft, "Back", onBack)
-                    ThemeToggle(theme.isDark, theme.toggle)
+                    Row(horizontalArrangement = Arrangement.spacedBy(TindiDims.space2)) {
+                        IconBtn(TIcon.Edit, "Edit recipe", onEdit)
+                        IconBtn(TIcon.Trash, "Delete recipe", { vm.clearDeleteError(); confirmDelete = true })
+                        ThemeToggle(theme.isDark, theme.toggle)
+                    }
                 }
                 SourceBadge(
                     recipe.sourceType,
@@ -185,6 +275,30 @@ fun RecipeScreen(container: AppContainer, id: String, onBack: () -> Unit, onStar
             Box(Modifier.padding(horizontal = TindiDims.space5, vertical = TindiDims.space3)) {
                 PrimaryButton("Start cooking", onStartCooking, icon = TIcon.Play)
             }
+        }
+    }
+
+    if (confirmDelete) {
+        TindiSheet(onDismiss = { if (!s.deleting) confirmDelete = false }) {
+            Heading("Delete ${recipe.name}?", style = TindiType.titleSm)
+            Spacer(Modifier.height(TindiDims.space3))
+            Text(
+                "This removes the recipe from your library. This cannot be undone.",
+                style = TindiType.body.copy(color = c.muted),
+            )
+            if (s.deleteError != null) {
+                Spacer(Modifier.height(TindiDims.space3))
+                ErrorLine(s.deleteError.orEmpty())
+            }
+            Spacer(Modifier.height(TindiDims.space6))
+            DangerButton(
+                if (s.deleting) "Deleting" else "Delete recipe",
+                onClick = { vm.delete { confirmDelete = false; onBack() } },
+                icon = TIcon.Trash,
+                enabled = !s.deleting,
+            )
+            Spacer(Modifier.height(TindiDims.space3))
+            SecondaryButton("Keep recipe", onClick = { confirmDelete = false }, enabled = !s.deleting)
         }
     }
 }

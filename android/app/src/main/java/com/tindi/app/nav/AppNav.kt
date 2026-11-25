@@ -50,8 +50,10 @@ object Routes {
     const val REVIEW = "review"
     const val RECIPE = "recipe/{id}"
     const val COOK = "cook/{id}"
+    const val EDIT = "edit/{id}"
     fun recipe(id: String) = "recipe/$id"
     fun cook(id: String) = "cook/$id"
+    fun edit(id: String) = "edit/$id"
 }
 
 @Composable
@@ -123,7 +125,12 @@ private fun AppNavHost(nav: NavHostController, container: AppContainer) {
         }
         composable(Routes.RECIPE) { e ->
             val id = e.arguments?.getString("id").orEmpty()
-            RecipeScreen(container, id, onBack = { nav.popBackStack() }, onStartCooking = { nav.navigate(Routes.cook(id)) })
+            RecipeScreen(
+                container, id,
+                onBack = { nav.popBackStack() },
+                onStartCooking = { nav.navigate(Routes.cook(id)) },
+                onEdit = { nav.navigate(Routes.edit(id)) },
+            )
         }
         composable(Routes.COOK) { e ->
             val id = e.arguments?.getString("id").orEmpty()
@@ -143,6 +150,10 @@ private fun AppNavHost(nav: NavHostController, container: AppContainer) {
                 onBack = { nav.popBackStack() },
                 onSaved = { nav.popBackStack(Routes.LIBRARY, inclusive = false) },
             )
+        }
+        composable(Routes.EDIT) { e ->
+            val id = e.arguments?.getString("id").orEmpty()
+            ReviewScreen(container, editId = id, onBack = { nav.popBackStack() }, onSaved = { nav.popBackStack() })
         }
         composable(Routes.PROFILE) { ProfileScreen(container) }
     }

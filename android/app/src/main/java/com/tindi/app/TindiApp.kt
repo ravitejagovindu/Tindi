@@ -2,12 +2,15 @@ package com.tindi.app
 
 import android.app.Application
 import android.content.Context
+import com.tindi.app.data.ApiAuthRepository
+import com.tindi.app.data.ApiCategoryRepository
+import com.tindi.app.data.ApiRecipeRepository
 import com.tindi.app.data.AuthRepository
+import com.tindi.app.data.remote.ApiFactory
+import com.tindi.app.data.remote.EncryptedSessionStore
+import com.tindi.app.data.remote.SessionStore
+import kotlinx.coroutines.launch
 import com.tindi.app.data.CategoryRepository
-import com.tindi.app.data.LocalAuthRepository
-import com.tindi.app.data.LocalCategoryRepository
-import com.tindi.app.data.LocalRecipeRepository
-import com.tindi.app.data.LocalStore
 import com.tindi.app.data.MockSourceFetcher
 import com.tindi.app.data.RecipeDraft
 import com.tindi.app.data.RecipeRepository
@@ -17,20 +20,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import java.io.File
 
-/** The only place that knows which implementations are in use. Swap them here for a real backend. */
+/** The only place that knows which implementations are in use. */
 class AppContainer(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val store = LocalStore(File(context.filesDir, "tindi_data.json"), scope)
+    private val sessionStore: SessionStore = EncryptedSessionStore(context.applicationContext, scope)
+    private val api = ApiFactory.create(BuildConfig.BASE_URL, sessionStore)
 
-    val auth: AuthRepository = LocalAuthRepository(store)
-    val recipes: RecipeRepository = LocalRecipeRepository(store)
-    val categories: CategoryRepository = LocalCategoryRepository(store)
+    val auth: AuthRepository = ApiAuthRepository(api, sessionStore, scope)
+    val recipes: RecipeRepository = ApiRecipeRepository(api, sessionStore, scope)
+    val categories: CategoryRepository = ApiCategoryRepository(api, sessionStore, recipes, scope)
     val sourceFetcher: SourceFetcher = MockSourceFetcher()
 
     val themePrefs = ThemePrefs(context)
     val draft = DraftHolder()
+
+    init {
+        // A half-made recipe must not outlive its session.
+        scope.launch { sessionStore.session.collect { if (it == null) draft.set(null) } }
+    }
 }
 
 /** Hands the picked source text from Add recipe to Review. */

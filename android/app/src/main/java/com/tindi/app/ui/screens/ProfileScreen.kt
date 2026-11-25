@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,32 +29,54 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tindi.app.AppContainer
+import com.tindi.app.data.Profile
 import com.tindi.app.data.Session
+import com.tindi.app.ui.components.ErrorLine
 import com.tindi.app.ui.components.Heading
 import com.tindi.app.ui.components.LabeledSwitch
 import com.tindi.app.ui.components.SecondaryButton
 import com.tindi.app.ui.components.TIcon
+import com.tindi.app.ui.components.TextAction
 import com.tindi.app.ui.theme.LocalThemeControl
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.TindiDims
 import com.tindi.app.ui.theme.TindiType
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class ProfileUiState(val session: Session? = null, val recipeCount: Int = 0, val categoryCount: Int = 0)
+data class ProfileUiState(
+    val session: Session? = null,
+    /** From GET /me. Null until it has loaded. */
+    val profile: Profile? = null,
+    val error: String? = null,
+    val loggingOut: Boolean = false,
+)
 
 class ProfileViewModel(private val container: AppContainer) : ViewModel() {
+    private val error = MutableStateFlow<String?>(null)
+    private val loggingOut = MutableStateFlow(false)
+
     val state: StateFlow<ProfileUiState> = combine(
-        container.auth.session, container.recipes.recipes, container.categories.categories,
-    ) { session, recipes, categories ->
-        ProfileUiState(session, recipes.size, categories.count { !it.builtIn })
+        container.auth.session, container.auth.profile, error, loggingOut,
+    ) { session, profile, err, out ->
+        ProfileUiState(session, profile, err, out)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProfileUiState())
 
+    fun reload() {
+        viewModelScope.launch { error.value = container.auth.refreshProfile()?.message }
+    }
+
     fun logOut() {
-        viewModelScope.launch { container.auth.logOut() }
+        if (loggingOut.value) return
+        loggingOut.value = true
+        viewModelScope.launch {
+            container.auth.logOut()
+            loggingOut.value = false
+        }
     }
 }
 
@@ -63,6 +86,7 @@ fun ProfileScreen(container: AppContainer) {
     val s by vm.state.collectAsStateWithLifecycle()
     val theme = LocalThemeControl.current
     val c = Tindi.colors
+    LaunchedEffect(Unit) { vm.reload() }
 
     Column(
         Modifier
@@ -90,8 +114,13 @@ fun ProfileScreen(container: AppContainer) {
         }
         Spacer(Modifier.height(TindiDims.space6))
         Row(horizontalArrangement = Arrangement.spacedBy(TindiDims.space3)) {
-            CountCard("Recipes", s.recipeCount, Modifier.weight(1f))
-            CountCard("Your categories", s.categoryCount, Modifier.weight(1f))
+            CountCard("Recipes", s.profile?.recipeCount?.toString() ?: "-", Modifier.weight(1f))
+            CountCard("Your categories", s.profile?.categoryCount?.toString() ?: "-", Modifier.weight(1f))
+        }
+        if (s.error != null && s.profile == null) {
+            Spacer(Modifier.height(TindiDims.space3))
+            ErrorLine(s.error.orEmpty())
+            TextAction("Try again", vm::reload)
         }
         Spacer(Modifier.height(TindiDims.space6))
         Box(
@@ -104,13 +133,13 @@ fun ProfileScreen(container: AppContainer) {
             LabeledSwitch("Dark mode", theme.isDark, onCheckedChange = { theme.toggle() })
         }
         Spacer(Modifier.height(TindiDims.space6))
-        SecondaryButton("Log out", onClick = vm::logOut, icon = TIcon.Logout)
+        SecondaryButton(if (s.loggingOut) "Logging out" else "Log out", onClick = vm::logOut, icon = TIcon.Logout, enabled = !s.loggingOut)
         Spacer(Modifier.height(TindiDims.space6))
     }
 }
 
 @Composable
-private fun CountCard(label: String, count: Int, modifier: Modifier) {
+private fun CountCard(label: String, count: String, modifier: Modifier) {
     val c = Tindi.colors
     Column(
         modifier
@@ -119,7 +148,7 @@ private fun CountCard(label: String, count: Int, modifier: Modifier) {
             .padding(TindiDims.space4)
             .semantics(mergeDescendants = true) {},
     ) {
-        Text(count.toString(), style = TindiType.titleMd.copy(color = c.ink))
+        Text(count, style = TindiType.titleMd.copy(color = c.ink))
         Text(label, style = TindiType.caption.copy(color = c.muted))
     }
 }

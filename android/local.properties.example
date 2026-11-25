@@ -1,0 +1,3 @@
+## Copy to android/local.properties (gitignored) and keep your sdk.dir line there.
+## Backend base URL, no trailing slash. Cleartext HTTP is allowed for this host only.
+tindi.baseUrl=http://<TAILSCALE_HOST>:7000/api/v1
