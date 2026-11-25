@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,9 @@ import androidx.lifecycle.viewModelScope
 import com.tindi.app.AppContainer
 import com.tindi.app.data.Category
 import com.tindi.app.ui.components.DangerButton
+import com.tindi.app.ui.components.ErrorLine
+import com.tindi.app.ui.components.ErrorState
+import com.tindi.app.ui.components.Skeleton
 import com.tindi.app.ui.components.Heading
 import com.tindi.app.ui.components.PlateIllustration
 import com.tindi.app.ui.components.SecondaryButton
@@ -49,6 +53,7 @@ import com.tindi.app.ui.components.TindiTextField
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.TindiDims
 import com.tindi.app.ui.theme.TindiType
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -56,6 +61,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class CategoriesUiState(
+    val loaded: Boolean = false,
+    /** Why the first load failed. */
+    val error: String? = null,
+    /** Last failed delete, shown above the list. */
+    val actionError: String? = null,
     val starter: List<Category> = emptyList(),
     val own: List<Category> = emptyList(),
     /** Recipes per category id. */
@@ -65,10 +75,17 @@ data class CategoriesUiState(
 )
 
 class CategoriesViewModel(private val container: AppContainer) : ViewModel() {
+    private val actionError = MutableStateFlow<String?>(null)
+
     val state: StateFlow<CategoriesUiState> = combine(
-        container.categories.categories, container.recipes.recipes,
-    ) { cats, recipes ->
+        combine(
+            container.categories.loaded, container.recipes.loaded,
+            container.categories.loadError, container.recipes.loadError,
+        ) { cl, rl, ce, re -> Pair(cl && rl, if (cl && rl) null else ce ?: re) },
+        container.categories.categories, container.recipes.recipes, actionError,
+    ) { (loaded, error), cats, recipes, action ->
         CategoriesUiState(
+            loaded = loaded, error = error, actionError = action,
             starter = cats.filter { it.builtIn },
             own = cats.filterNot { it.builtIn },
             counts = cats.associate { cat -> cat.id to recipes.count { cat.id in it.categoryIds } },
@@ -78,8 +95,16 @@ class CategoriesViewModel(private val container: AppContainer) : ViewModel() {
 
     suspend fun create(name: String) = container.categories.create(name)
     suspend fun rename(id: String, name: String) = container.categories.rename(id, name)
+
+    fun reload() {
+        viewModelScope.launch {
+            launch { container.categories.refresh() }
+            container.recipes.refresh()
+        }
+    }
+
     fun delete(id: String) {
-        viewModelScope.launch { container.categories.delete(id) }
+        viewModelScope.launch { actionError.value = container.categories.delete(id) }
     }
 }
 
@@ -89,6 +114,7 @@ fun CategoriesScreen(container: AppContainer) {
     val s by vm.state.collectAsStateWithLifecycle()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val c = Tindi.colors
+    LaunchedEffect(Unit) { vm.reload() }
 
     var newName by remember { mutableStateOf("") }
     var newError by remember { mutableStateOf<String?>(null) }
@@ -102,6 +128,27 @@ fun CategoriesScreen(container: AppContainer) {
             val e = vm.create(newName)
             if (e == null) newName = "" else newError = e
         }
+    }
+
+    if (s.error != null) {
+        Column(Modifier.fillMaxSize().padding(horizontal = TindiDims.space5, vertical = TindiDims.space4)) {
+            Heading("Categories")
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                ErrorState(s.error.orEmpty(), vm::reload)
+            }
+        }
+        return
+    }
+    if (!s.loaded) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = TindiDims.space5, vertical = TindiDims.space4),
+            verticalArrangement = Arrangement.spacedBy(TindiDims.space2),
+        ) {
+            Heading("Categories")
+            Spacer(Modifier.height(TindiDims.space3))
+            repeat(5) { Skeleton(Modifier.fillMaxWidth().height(56.dp), RoundedCornerShape(TindiDims.radiusInput)) }
+        }
+        return
     }
 
     LazyColumn(
@@ -130,6 +177,10 @@ fun CategoriesScreen(container: AppContainer) {
                         contentAlignment = Alignment.Center,
                     ) { TIconImage(TIcon.Plus, c.onAccent, "Create category") }
                 }
+            }
+            if (s.actionError != null) {
+                Spacer(Modifier.height(TindiDims.space3))
+                ErrorLine(s.actionError.orEmpty())
             }
             Spacer(Modifier.height(TindiDims.space6))
             SectionLabel("Your categories")

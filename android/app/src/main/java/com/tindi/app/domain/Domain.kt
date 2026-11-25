@@ -23,10 +23,6 @@ fun filterRecipes(recipes: List<Recipe>, categoryId: String?, query: String): Li
     }
 }
 
-/** Deleting a category never deletes recipes. A recipe left with no category is Uncategorised. */
-fun removeCategoryFromRecipes(recipes: List<Recipe>, categoryId: String): List<Recipe> =
-    recipes.map { if (categoryId in it.categoryIds) it.copy(categoryIds = it.categoryIds - categoryId) else it }
-
 object AuthValidator {
     private val emailRegex = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
 

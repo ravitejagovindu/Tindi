@@ -1,6 +1,9 @@
 package com.tindi.app.data
 
+import com.tindi.app.data.remote.ApiError
+import com.tindi.app.data.remote.ApiResult
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 data class AuthErrors(
     val name: String? = null,
@@ -15,31 +18,56 @@ sealed interface AuthResult {
 }
 
 interface AuthRepository {
-    /** False until saved data has been read from the device. */
+    /** False until the saved session has been read from the device. */
     val ready: Flow<Boolean>
+
+    /** Null means logged out. Any 401 from the server sets this back to null. */
     val session: Flow<Session?>
+
+    /** From GET /me. Null until [refreshProfile] has succeeded. */
+    val profile: Flow<Profile?>
+
     suspend fun signUp(name: String, email: String, password: String): AuthResult
     suspend fun logIn(email: String, password: String): AuthResult
+
+    /** Calls the server, then clears the token and cached data. Clears locally even if the server is unreachable. */
     suspend fun logOut()
+
+    /** Returns an error to show, or null on success. */
+    suspend fun refreshProfile(): ApiError?
 }
 
 interface RecipeRepository {
-    /** False until saved data has been read. Drives the Loading skeleton. */
+    /** False until the first load has finished. Drives the Loading skeleton. */
     val loaded: Flow<Boolean>
-    val recipes: Flow<List<Recipe>>
-    suspend fun add(recipe: Recipe)
+
+    /** Why the first load failed, shown with a Retry. Null once loaded. */
+    val loadError: Flow<String?>
+    val recipes: StateFlow<List<Recipe>>
+
+    /** GET /recipes. Silent when data is already shown. */
+    suspend fun refresh()
+
+    /** GET /recipes/{id}. Updates the cached copy, or drops it on 404. */
+    suspend fun get(id: String): ApiResult<Recipe>
+    suspend fun create(input: RecipeInput): ApiResult<Recipe>
+    suspend fun update(id: String, input: RecipeInput): ApiResult<Recipe>
+    suspend fun delete(id: String): ApiResult<Unit>
 }
 
 interface CategoryRepository {
-    /** Starter set first, then the user's own. */
-    val categories: Flow<List<Category>>
+    /** Starter set first, then the user's own. Shows the starter set until the first load finishes. */
+    val categories: StateFlow<List<Category>>
+    val loaded: Flow<Boolean>
+    val loadError: Flow<String?>
+    suspend fun refresh()
 
-    /** Each returns an error message to show in the field, or null on success. */
+    /** Each returns an error message to show, or null on success. */
     suspend fun create(name: String): String?
     suspend fun rename(id: String, name: String): String?
 
-    /** Recipes in the deleted category move to Uncategorised if they have no other category. */
-    suspend fun delete(id: String)
+    /** Recipes in the deleted category move to Uncategorised (the server does it, recipes are refreshed). */
+    suspend fun delete(id: String): String?
 }
 
 data class VideoSource(

@@ -28,18 +28,32 @@ data class Category(val id: String, val name: String, val builtIn: Boolean = fal
 /** What the UI knows about the signed in user. Never carries the password. */
 data class Session(val name: String, val email: String)
 
+/** From GET /me. */
+data class Profile(val name: String, val email: String, val recipeCount: Int, val categoryCount: Int)
+
+/** What the editor sends to create or replace a recipe. */
+data class RecipeInput(
+    val name: String,
+    val ingredients: List<Ingredient>,
+    val steps: List<String>,
+    val categoryIds: List<String>,
+    val sourceType: SourceType,
+    val sourceUrl: String?,
+)
+
 object Categories {
     /** Virtual category: a recipe with no categoryIds belongs here. Never stored. */
     const val UNCATEGORISED_ID = "uncategorised"
     const val UNCATEGORISED_NAME = "Uncategorised"
 
+    /** Same ids as the server, so the list works before the first load. */
     val starter: List<Category> = listOf(
-        Category("starter-breakfast", "Breakfast", true),
-        Category("starter-lunch", "Lunch", true),
-        Category("starter-snacks", "Snacks", true),
-        Category("starter-dinner", "Dinner", true),
-        Category("starter-healthy", "Healthy", true),
-        Category("starter-protein", "Protein", true),
+        Category("00000000-0000-4000-8000-000000000001", "Breakfast", true),
+        Category("00000000-0000-4000-8000-000000000002", "Lunch", true),
+        Category("00000000-0000-4000-8000-000000000003", "Snacks", true),
+        Category("00000000-0000-4000-8000-000000000004", "Dinner", true),
+        Category("00000000-0000-4000-8000-000000000005", "Healthy", true),
+        Category("00000000-0000-4000-8000-000000000006", "Protein", true),
     )
 }
 

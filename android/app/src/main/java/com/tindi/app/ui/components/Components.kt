@@ -144,9 +144,11 @@ fun SecondaryButton(
 )
 
 @Composable
-fun DangerButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: TIcon? = null) =
+fun DangerButton(
+    text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: TIcon? = null, enabled: Boolean = true,
+) =
     BaseButton(
-        text, onClick, modifier.fillMaxWidth(), true, icon,
+        text, onClick, modifier.fillMaxWidth(), enabled, icon,
         Tindi.colors.danger, Tindi.colors.onDanger, null,
     )
 

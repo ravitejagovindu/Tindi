@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,7 @@ import com.tindi.app.domain.filterRecipes
 import com.tindi.app.ui.components.CategoryChip
 import com.tindi.app.ui.components.ExtendedFab
 import com.tindi.app.ui.components.Heading
+import com.tindi.app.ui.components.ErrorState
 import com.tindi.app.ui.components.PlateIllustration
 import com.tindi.app.ui.components.PrimaryButton
 import com.tindi.app.ui.components.SecondaryButton
@@ -72,6 +74,8 @@ fun recipeVariant(id: String): Int = abs(id.hashCode()) % 4
 
 data class LibraryUiState(
     val loaded: Boolean = false,
+    /** Why the first load failed. Null while loading or once loaded. */
+    val error: String? = null,
     val allRecipes: List<Recipe> = emptyList(),
     val categories: List<Category> = emptyList(),
     val hasUncategorised: Boolean = false,
@@ -85,8 +89,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val query = MutableStateFlow("")
 
     val state: StateFlow<LibraryUiState> = combine(
-        container.recipes.loaded, container.recipes.recipes, container.categories.categories, selected, query,
-    ) { loaded, recipes, categories, sel, q ->
+        combine(
+            container.recipes.loaded, container.categories.loaded,
+            container.recipes.loadError, container.categories.loadError,
+        ) { rl, cl, re, ce -> Pair(rl && cl, if (rl && cl) null else re ?: ce) },
+        container.recipes.recipes, container.categories.categories, selected, query,
+    ) { (loaded, error), recipes, categories, sel, q ->
         val hasUncat = recipes.any { it.categoryIds.isEmpty() }
         // A category that no longer exists (or an emptied Uncategorised) falls back to All.
         val validSel = when (sel) {
@@ -95,10 +103,17 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
             else -> sel.takeIf { id -> categories.any { it.id == id } }
         }
         LibraryUiState(
-            loaded = loaded, allRecipes = recipes, categories = categories, hasUncategorised = hasUncat,
+            loaded = loaded, error = error, allRecipes = recipes, categories = categories, hasUncategorised = hasUncat,
             selectedCategory = validSel, query = q, visible = filterRecipes(recipes, validSel, q),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
+
+    fun reload() {
+        viewModelScope.launch {
+            launch { container.categories.refresh() }
+            container.recipes.refresh()
+        }
+    }
 
     fun selectCategory(id: String?) { selected.value = id }
     fun setQuery(q: String) { query.value = q }
@@ -114,6 +129,9 @@ fun LibraryScreen(container: AppContainer, onOpenRecipe: (String) -> Unit, onAdd
     val theme = LocalThemeControl.current
     var showNew by remember { mutableStateOf(false) }
 
+    // Fetch again each time the tab is opened. Quiet when recipes are already on screen.
+    LaunchedEffect(Unit) { vm.reload() }
+
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Row(
@@ -125,7 +143,7 @@ fun LibraryScreen(container: AppContainer, onOpenRecipe: (String) -> Unit, onAdd
             }
 
             val firstRun = s.loaded && s.allRecipes.isEmpty()
-            if (!firstRun) {
+            if (!firstRun && s.error == null) {
                 Spacer(Modifier.height(TindiDims.space3))
                 TindiSearchBar(
                     s.query, vm::setQuery,
@@ -158,6 +176,9 @@ fun LibraryScreen(container: AppContainer, onOpenRecipe: (String) -> Unit, onAdd
             }
 
             when {
+                s.error != null -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    ErrorState(s.error.orEmpty(), vm::reload)
+                }
                 !s.loaded -> LoadingGrid()
                 firstRun -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     StateBlock(
@@ -196,7 +217,7 @@ fun LibraryScreen(container: AppContainer, onOpenRecipe: (String) -> Unit, onAdd
             }
         }
 
-        if (!(s.loaded && s.allRecipes.isEmpty())) {
+        if (s.loaded && s.allRecipes.isNotEmpty()) {
             ExtendedFab(
                 "Add recipe", TIcon.Plus, onAdd,
                 Modifier.align(Alignment.BottomEnd).padding(end = TindiDims.space5, bottom = TindiDims.space4),

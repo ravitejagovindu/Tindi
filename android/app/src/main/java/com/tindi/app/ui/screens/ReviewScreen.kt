@@ -45,13 +45,20 @@ import com.tindi.app.data.Category
 import com.tindi.app.data.Ingredient
 import com.tindi.app.data.Recipe
 import com.tindi.app.data.RecipeDraft
+import com.tindi.app.data.RecipeInput
+import com.tindi.app.data.SourceType
+import com.tindi.app.data.remote.ApiError
+import com.tindi.app.data.remote.ApiResult
 import com.tindi.app.ui.components.CheckChip
+import com.tindi.app.ui.components.ErrorLine
+import com.tindi.app.ui.components.ErrorState
 import com.tindi.app.ui.components.Heading
 import com.tindi.app.ui.components.IconBtn
 import com.tindi.app.ui.components.PrimaryButton
 import com.tindi.app.ui.components.SecondaryButton
 import com.tindi.app.ui.components.TIcon
 import com.tindi.app.ui.components.TIconImage
+import com.tindi.app.ui.components.Skeleton
 import com.tindi.app.ui.components.TindiTabs
 import com.tindi.app.ui.components.TindiTextField
 import com.tindi.app.ui.theme.Tindi
@@ -64,14 +71,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 data class ReviewUiState(
+    /** False while an edited recipe is still being fetched. */
+    val ready: Boolean = true,
+    val loadError: String? = null,
+    val busy: Boolean = false,
     val tab: Int = 0,
     val name: String = "",
     val categoryIds: Set<String> = emptySet(),
     val ingredients: List<Ingredient> = emptyList(),
     val steps: List<String> = emptyList(),
+    val sourceType: SourceType = SourceType.Pasted,
+    val sourceUrl: String? = null,
     val qty: String = "",
     val item: String = "",
     val stepText: String = "",
@@ -79,15 +91,54 @@ data class ReviewUiState(
     val saveError: String? = null,
 )
 
-class ReviewViewModel(private val container: AppContainer) : ViewModel() {
+/** Create mode (editId null) reads the draft from Add recipe. Edit mode starts from a saved recipe. */
+class ReviewViewModel(private val container: AppContainer, private val editId: String?) : ViewModel() {
+    val isEdit: Boolean = editId != null
     val draft: StateFlow<RecipeDraft?> = container.draft.draft
+
+    /** The text the recipe was made from. Only exists when creating. */
+    val sourceText: String? = if (isEdit) null else container.draft.draft.value?.sourceText
+
     var saved = false
         private set
     val categories: StateFlow<List<Category>> = container.categories.categories
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _state = MutableStateFlow(ReviewUiState(name = container.draft.draft.value?.suggestedName.orEmpty()))
+    private val _state = MutableStateFlow(initial())
     val state: StateFlow<ReviewUiState> = _state
+
+    private fun fromRecipe(r: Recipe) = ReviewUiState(
+        name = r.name, categoryIds = r.categoryIds.toSet(), ingredients = r.ingredients, steps = r.steps,
+        sourceType = r.sourceType, sourceUrl = r.sourceUrl,
+    )
+
+    private fun initial(): ReviewUiState {
+        if (editId == null) {
+            val d = container.draft.draft.value
+            return ReviewUiState(
+                name = d?.suggestedName.orEmpty(),
+                sourceType = d?.sourceType ?: SourceType.Pasted,
+                sourceUrl = d?.sourceUrl,
+            )
+        }
+        val cached = container.recipes.recipes.value.firstOrNull { it.id == editId }
+        return if (cached != null) fromRecipe(cached) else ReviewUiState(ready = false)
+    }
+
+    init {
+        if (!_state.value.ready) load()
+    }
+
+    fun load() {
+        val id = editId ?: return
+        _state.update { it.copy(loadError = null) }
+        viewModelScope.launch {
+            when (val r = container.recipes.get(id)) {
+                is ApiResult.Ok -> _state.value = fromRecipe(r.value)
+                is ApiResult.Fail -> _state.update { it.copy(loadError = r.error.message) }
+            }
+        }
+    }
 
     fun setTab(i: Int) = _state.update { it.copy(tab = i) }
     fun setName(v: String) = _state.update { it.copy(name = v, nameError = null, saveError = null) }
@@ -115,9 +166,23 @@ class ReviewViewModel(private val container: AppContainer) : ViewModel() {
 
     fun removeStep(i: Int) = _state.update { it.copy(steps = it.steps.filterIndexed { n, _ -> n != i }) }
 
+    /** Puts a server rejection where the user can see it: the name field, or the tab that holds the bad row. */
+    private fun withServerError(s: ReviewUiState, e: ApiError): ReviewUiState {
+        val name = e.fields["name"]
+        val tab = when {
+            name != null -> 0
+            e.fields.keys.any { it.startsWith("ingredients") } -> 1
+            e.fields.keys.any { it.startsWith("steps") } -> 2
+            e.fields.keys.any { it.startsWith("categoryIds") } -> 0
+            else -> s.tab
+        }
+        val line = if (e.code == "VALIDATION_FAILED") e.fields.values.firstOrNull() ?: e.message else e.message
+        return s.copy(busy = false, tab = tab, nameError = name, saveError = line)
+    }
+
     fun save(onSaved: () -> Unit) {
         val s = _state.value
-        val d = container.draft.draft.value ?: return
+        if (s.busy || !s.ready) return
         when {
             s.name.isBlank() -> _state.update {
                 it.copy(tab = 0, nameError = "Give the recipe a name.", saveError = "Add a name before saving.")
@@ -128,21 +193,28 @@ class ReviewViewModel(private val container: AppContainer) : ViewModel() {
             s.steps.isEmpty() -> _state.update {
                 it.copy(tab = 2, saveError = "Add at least one step.")
             }
-            else -> viewModelScope.launch {
-                container.recipes.add(
-                    Recipe(
-                        id = UUID.randomUUID().toString(),
+            else -> {
+                _state.update { it.copy(busy = true, saveError = null, nameError = null) }
+                viewModelScope.launch {
+                    val input = RecipeInput(
                         name = s.name.trim(),
                         ingredients = s.ingredients,
                         steps = s.steps,
                         categoryIds = s.categoryIds.toList(),
-                        sourceType = d.sourceType,
-                        sourceUrl = d.sourceUrl,
-                    ),
-                )
-                saved = true
-                container.draft.set(null)
-                onSaved()
+                        sourceType = s.sourceType,
+                        sourceUrl = s.sourceUrl,
+                    )
+                    val result = if (editId == null) container.recipes.create(input) else container.recipes.update(editId, input)
+                    when (result) {
+                        is ApiResult.Ok -> {
+                            saved = true
+                            if (editId == null) container.draft.set(null)
+                            _state.update { it.copy(busy = false) }
+                            onSaved()
+                        }
+                        is ApiResult.Fail -> _state.update { withServerError(it, result.error) }
+                    }
+                }
             }
         }
     }
@@ -150,16 +222,18 @@ class ReviewViewModel(private val container: AppContainer) : ViewModel() {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ReviewScreen(container: AppContainer, onBack: () -> Unit, onSaved: () -> Unit) {
-    val vm = appViewModel { ReviewViewModel(container) }
+fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> Unit, onSaved: () -> Unit) {
+    val vm = appViewModel(key = "review-${editId ?: "new"}") { ReviewViewModel(container, editId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val draft by vm.draft.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val c = Tindi.colors
 
-    // The draft only lives in memory. If it is gone (process death), go back to Add recipe.
-    LaunchedEffect(draft) { if (draft == null && !vm.saved) onBack() }
-    val d = draft ?: return
+    // The draft only lives in memory. If it is gone (process death, logout), go back to Add recipe.
+    if (!vm.isEdit) {
+        LaunchedEffect(draft) { if (draft == null && !vm.saved) onBack() }
+        if (draft == null) return
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -168,7 +242,18 @@ fun ReviewScreen(container: AppContainer, onBack: () -> Unit, onSaved: () -> Uni
             horizontalArrangement = Arrangement.spacedBy(TindiDims.space3),
         ) {
             IconBtn(TIcon.ArrowLeft, "Back", onBack)
-            Heading("Review recipe", style = TindiType.titleMd)
+            Heading(if (vm.isEdit) "Edit recipe" else "Review recipe", style = TindiType.titleMd)
+        }
+        if (!s.ready) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (s.loadError != null) ErrorState(s.loadError.orEmpty(), vm::load)
+                else Column(Modifier.fillMaxWidth().padding(horizontal = TindiDims.space5)) {
+                    Skeleton(Modifier.fillMaxWidth().height(56.dp), RoundedCornerShape(TindiDims.radiusInput))
+                    Spacer(Modifier.height(TindiDims.space4))
+                    Skeleton(Modifier.fillMaxWidth(0.6f).height(20.dp))
+                }
+            }
+            return@Column
         }
         Box(Modifier.padding(horizontal = TindiDims.space5)) {
             TindiTabs(listOf("Details", "Ingredients", "Steps"), s.tab, vm::setTab)
@@ -203,12 +288,12 @@ fun ReviewScreen(container: AppContainer, onBack: () -> Unit, onSaved: () -> Uni
                     )
                     Spacer(Modifier.height(TindiDims.space5))
                     Text(
-                        if (d.sourceUrl != null) "Source: YouTube link kept with the recipe." else "Source: pasted text.",
+                        if (s.sourceUrl != null) "Source: YouTube link kept with the recipe." else "Source: pasted text.",
                         style = TindiType.caption.copy(color = c.muted),
                     )
                 }
                 1 -> {
-                    SourceTextCard(d.sourceText, "ingredients")
+                    vm.sourceText?.let { SourceTextCard(it, "ingredients") }
                     Spacer(Modifier.height(TindiDims.space4))
                     s.ingredients.forEachIndexed { i, ing ->
                         ListRow(ing.display, "Remove ingredient ${ing.display}") { vm.removeIngredient(i) }
@@ -230,7 +315,7 @@ fun ReviewScreen(container: AppContainer, onBack: () -> Unit, onSaved: () -> Uni
                     SecondaryButton("Add ingredient", vm::addIngredient, icon = TIcon.Plus, enabled = s.item.isNotBlank())
                 }
                 else -> {
-                    SourceTextCard(d.sourceText, "steps")
+                    vm.sourceText?.let { SourceTextCard(it, "steps") }
                     Spacer(Modifier.height(TindiDims.space4))
                     s.steps.forEachIndexed { i, step ->
                         ListRow("${i + 1}. $step", "Remove step ${i + 1}") { vm.removeStep(i) }
@@ -250,13 +335,13 @@ fun ReviewScreen(container: AppContainer, onBack: () -> Unit, onSaved: () -> Uni
             Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
             Column(Modifier.padding(horizontal = TindiDims.space5, vertical = TindiDims.space3)) {
                 if (s.saveError != null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        TIconImage(TIcon.Alert, c.danger, null, size = 16.dp, modifier = Modifier.padding(top = 1.dp))
-                        Text(s.saveError.orEmpty(), style = TindiType.caption.copy(color = c.danger))
-                    }
+                    ErrorLine(s.saveError.orEmpty())
                     Spacer(Modifier.height(TindiDims.space2))
                 }
-                PrimaryButton("Save recipe", onClick = { vm.save(onSaved) }, icon = TIcon.Check)
+                PrimaryButton(
+                    if (s.busy) "Saving" else if (vm.isEdit) "Save changes" else "Save recipe",
+                    onClick = { vm.save(onSaved) }, icon = TIcon.Check, enabled = !s.busy,
+                )
             }
         }
     }

@@ -6,7 +6,6 @@ import com.tindi.app.data.Recipe
 import com.tindi.app.data.SourceType
 import com.tindi.app.domain.AuthValidator
 import com.tindi.app.domain.filterRecipes
-import com.tindi.app.domain.removeCategoryFromRecipes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -56,23 +55,6 @@ class LibraryLogicTest {
 
     @Test fun blankQueryIsIgnored() {
         assertEquals(listOf(paneer), filterRecipes(all, "dinner", "   "))
-    }
-
-    @Test fun deletingCategoryKeepsEveryRecipe() {
-        val result = removeCategoryFromRecipes(all, "dinner")
-        assertEquals(all.size, result.size)
-        assertEquals(listOf("1", "2", "3"), result.map { it.id })
-    }
-
-    @Test fun recipeOnlyInDeletedCategoryBecomesUncategorised() {
-        val result = removeCategoryFromRecipes(all, "dinner")
-        assertEquals(emptyList<String>(), result.first { it.id == "1" }.categoryIds)
-        assertEquals(listOf(paneer.copy(categoryIds = emptyList()), chaat), filterRecipes(result, Categories.UNCATEGORISED_ID, "").let { listOf(it[0], it[1]) })
-    }
-
-    @Test fun recipeWithOtherCategoriesKeepsThem() {
-        val result = removeCategoryFromRecipes(all, "breakfast")
-        assertEquals(listOf("healthy"), result.first { it.id == "2" }.categoryIds)
     }
 
     @Test fun authValidation() {
