@@ -70,22 +70,39 @@ interface CategoryRepository {
     suspend fun delete(id: String): String?
 }
 
+/** What the server found for one YouTube link (POST /source/fetch). */
 data class VideoSource(
+    /** The video link to keep with the recipe, as the server returns it. */
     val url: String,
     val title: String,
     val channel: String,
+    val thumbnailUrl: String?,
     val description: String,
-    val pinnedComment: String,
-    val topComments: List<String>,
+    val comments: List<SourceComment>,
+    val suggestedIngredients: List<String>,
+    val suggestedSteps: List<String>,
+    val confidence: Confidence,
+    val foundIn: FoundIn,
 )
+
+/** Why a fetch failed. Each one has a message for the user in [FetchFailure.message]. */
+enum class FetchFailure(val message: String, val canRetry: Boolean) {
+    NotFound("Video not found or private", false),
+    QuotaExceeded("Daily fetch limit reached, try again tomorrow or paste the text", false),
+    Unavailable("Fetching isn't available right now, paste the text instead", true),
+    Network("Can't reach server", true),
+    Other("Something went wrong while getting the video", true),
+}
 
 sealed interface FetchResult {
     data class Success(val source: VideoSource) : FetchResult
+
+    /** Not a YouTube link (Instagram and so on). No network call was needed to know. */
     data object NotYouTube : FetchResult
-    data object Failed : FetchResult
+    data class Failed(val reason: FetchFailure) : FetchResult
 }
 
-/** Shaped after the YouTube Data API: video snippet + comment threads for one link. */
+/** Turns a link into a video's text. The real one asks the Tindi server, which asks YouTube. */
 interface SourceFetcher {
     suspend fun fetch(url: String): FetchResult
 }

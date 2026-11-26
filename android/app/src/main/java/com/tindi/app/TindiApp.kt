@@ -11,7 +11,7 @@ import com.tindi.app.data.remote.EncryptedSessionStore
 import com.tindi.app.data.remote.SessionStore
 import kotlinx.coroutines.launch
 import com.tindi.app.data.CategoryRepository
-import com.tindi.app.data.MockSourceFetcher
+import com.tindi.app.data.ApiSourceFetcher
 import com.tindi.app.data.RecipeDraft
 import com.tindi.app.data.RecipeRepository
 import com.tindi.app.data.SourceFetcher
@@ -30,7 +30,7 @@ class AppContainer(context: Context) {
     val auth: AuthRepository = ApiAuthRepository(api, sessionStore, scope)
     val recipes: RecipeRepository = ApiRecipeRepository(api, sessionStore, scope)
     val categories: CategoryRepository = ApiCategoryRepository(api, sessionStore, recipes, scope)
-    val sourceFetcher: SourceFetcher = MockSourceFetcher()
+    val sourceFetcher: SourceFetcher = ApiSourceFetcher(api)
 
     val themePrefs = ThemePrefs(context)
     val draft = DraftHolder()

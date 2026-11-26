@@ -57,10 +57,32 @@ object Categories {
     )
 }
 
-/** What Add recipe hands to Review. */
+/** What Add recipe hands to Review. Nothing in it is saved until the user taps Save. */
 data class RecipeDraft(
-    val sourceText: String,
     val sourceType: SourceType,
     val sourceUrl: String?,
-    val suggestedName: String = "",
+    val title: String = "",
+    val ingredients: List<Ingredient> = emptyList(),
+    val steps: List<String> = emptyList(),
+    /** Pasted recipes keep the original text so the user can copy from it in Review. */
+    val sourceText: String? = null,
+    /** YouTube recipes keep what the server found, for the "From the video" panel. */
+    val video: VideoInfo? = null,
 )
+
+/** The video details Review shows and the helper panel works from. */
+data class VideoInfo(
+    val title: String,
+    val channel: String,
+    val thumbnailUrl: String?,
+    val description: String,
+    val comments: List<SourceComment>,
+    val confidence: Confidence,
+    val foundIn: FoundIn,
+)
+
+data class SourceComment(val author: String, val text: String, val likeCount: Int, val isPinnedLikely: Boolean)
+
+enum class Confidence { High, Low, None }
+
+enum class FoundIn { Description, Comment, None }

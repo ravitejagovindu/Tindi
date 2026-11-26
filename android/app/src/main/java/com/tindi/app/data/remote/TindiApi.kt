@@ -27,6 +27,8 @@ interface TindiApi {
     @PATCH("categories/{id}") suspend fun renameCategory(@Path("id") id: String, @Body body: NameRequest): retrofit2.Response<CategoryDto>
     @DELETE("categories/{id}") suspend fun deleteCategory(@Path("id") id: String): retrofit2.Response<Unit>
 
+    @POST("source/fetch") suspend fun fetchSource(@Body body: FetchRequest): retrofit2.Response<FetchResponseDto>
+
     @GET("recipes") suspend fun recipes(): retrofit2.Response<List<RecipeDto>>
     @GET("recipes/{id}") suspend fun recipe(@Path("id") id: String): retrofit2.Response<RecipeDto>
     @POST("recipes") suspend fun createRecipe(@Body body: RecipeRequest): retrofit2.Response<RecipeDto>

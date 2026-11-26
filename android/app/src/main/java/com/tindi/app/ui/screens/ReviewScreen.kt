@@ -47,6 +47,9 @@ import com.tindi.app.data.Recipe
 import com.tindi.app.data.RecipeDraft
 import com.tindi.app.data.RecipeInput
 import com.tindi.app.data.SourceType
+import com.tindi.app.data.VideoInfo
+import com.tindi.app.domain.RecipeTextSplitter
+import com.tindi.app.domain.needsNote
 import com.tindi.app.data.remote.ApiError
 import com.tindi.app.data.remote.ApiResult
 import com.tindi.app.ui.components.CheckChip
@@ -84,6 +87,10 @@ data class ReviewUiState(
     val steps: List<String> = emptyList(),
     val sourceType: SourceType = SourceType.Pasted,
     val sourceUrl: String? = null,
+    val channel: String? = null,
+    val thumbnailUrl: String? = null,
+    /** Short confirmation after "Use as ingredients / steps". */
+    val notice: String? = null,
     val qty: String = "",
     val item: String = "",
     val stepText: String = "",
@@ -96,8 +103,11 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
     val isEdit: Boolean = editId != null
     val draft: StateFlow<RecipeDraft?> = container.draft.draft
 
-    /** The text the recipe was made from. Only exists when creating. */
+    /** The text the recipe was pasted from. Only exists when creating from pasted text. */
     val sourceText: String? = if (isEdit) null else container.draft.draft.value?.sourceText
+
+    /** What the server found for a YouTube link. Drives the "From the video" panel. */
+    val video: VideoInfo? = if (isEdit) null else container.draft.draft.value?.video
 
     var saved = false
         private set
@@ -116,9 +126,13 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         if (editId == null) {
             val d = container.draft.draft.value
             return ReviewUiState(
-                name = d?.suggestedName.orEmpty(),
+                name = d?.title.orEmpty(),
+                ingredients = d?.ingredients.orEmpty(),
+                steps = d?.steps.orEmpty(),
                 sourceType = d?.sourceType ?: SourceType.Pasted,
                 sourceUrl = d?.sourceUrl,
+                channel = d?.video?.channel,
+                thumbnailUrl = d?.video?.thumbnailUrl,
             )
         }
         val cached = container.recipes.recipes.value.firstOrNull { it.id == editId }
@@ -140,7 +154,7 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         }
     }
 
-    fun setTab(i: Int) = _state.update { it.copy(tab = i) }
+    fun setTab(i: Int) = _state.update { it.copy(tab = i, notice = null) }
     fun setName(v: String) = _state.update { it.copy(name = v, nameError = null, saveError = null) }
     fun toggleCategory(id: String, on: Boolean) =
         _state.update { it.copy(categoryIds = if (on) it.categoryIds + id else it.categoryIds - id) }
@@ -165,6 +179,32 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
     }
 
     fun removeStep(i: Int) = _state.update { it.copy(steps = it.steps.filterIndexed { n, _ -> n != i }) }
+
+    /** Replaces the ingredient list with the lines of [text] (its ingredients section if it has one). */
+    fun useAsIngredients(text: String) {
+        val lines = RecipeTextSplitter.asIngredients(text)
+        _state.update {
+            if (lines.isEmpty()) it.copy(notice = "Nothing to use in that text.")
+            else it.copy(
+                ingredients = lines.map(RecipeTextSplitter::parseIngredient), saveError = null,
+                notice = "Ingredients filled with ${lines.size} lines. Check them in the Ingredients tab.",
+            )
+        }
+    }
+
+    /** Replaces the steps with the lines of [text] (its method section if it has one). */
+    fun useAsSteps(text: String) {
+        val lines = RecipeTextSplitter.asSteps(text)
+        _state.update {
+            if (lines.isEmpty()) it.copy(notice = "Nothing to use in that text.")
+            else it.copy(
+                steps = lines, saveError = null,
+                notice = "Steps filled with ${lines.size} lines. Check them in the Steps tab.",
+            )
+        }
+    }
+
+    fun clearNotice() = _state.update { it.copy(notice = null) }
 
     /** Puts a server rejection where the user can see it: the name field, or the tab that holds the bad row. */
     private fun withServerError(s: ReviewUiState, e: ApiError): ReviewUiState {
@@ -228,6 +268,7 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
     val draft by vm.draft.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val c = Tindi.colors
+    var helperOpen by rememberSaveable { mutableStateOf(vm.video?.needsNote == true) }
 
     // The draft only lives in memory. If it is gone (process death, logout), go back to Add recipe.
     if (!vm.isEdit) {
@@ -269,6 +310,14 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
         ) {
             when (s.tab) {
                 0 -> {
+                    if (vm.video != null) {
+                        VideoSummaryCard(s.channel, s.thumbnailUrl, s.sourceUrl)
+                        Spacer(Modifier.height(TindiDims.space5))
+                        if (vm.video.needsNote) {
+                            LowConfidenceNote()
+                            Spacer(Modifier.height(TindiDims.space5))
+                        }
+                    }
                     TindiTextField(
                         label = "Recipe name", value = s.name, onValueChange = vm::setName, error = s.nameError,
                         placeholder = "For example, Paneer Butter Masala",
@@ -293,7 +342,7 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     )
                 }
                 1 -> {
-                    vm.sourceText?.let { SourceTextCard(it, "ingredients") }
+                    SourceHelp(vm, s.notice, helperOpen, { helperOpen = !helperOpen }, "ingredients")
                     Spacer(Modifier.height(TindiDims.space4))
                     s.ingredients.forEachIndexed { i, ing ->
                         ListRow(ing.display, "Remove ingredient ${ing.display}") { vm.removeIngredient(i) }
@@ -315,7 +364,7 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     SecondaryButton("Add ingredient", vm::addIngredient, icon = TIcon.Plus, enabled = s.item.isNotBlank())
                 }
                 else -> {
-                    vm.sourceText?.let { SourceTextCard(it, "steps") }
+                    SourceHelp(vm, s.notice, helperOpen, { helperOpen = !helperOpen }, "steps")
                     Spacer(Modifier.height(TindiDims.space4))
                     s.steps.forEachIndexed { i, step ->
                         ListRow("${i + 1}. $step", "Remove step ${i + 1}") { vm.removeStep(i) }
@@ -409,5 +458,26 @@ private fun SourceTextCard(text: String, forWhat: String) {
                 )
             }
         }
+    }
+}
+
+/** Under the Ingredients and Steps tabs: the video helper for YouTube recipes, the pasted text for pasted ones. */
+@Composable
+private fun SourceHelp(
+    vm: ReviewViewModel,
+    notice: String?,
+    open: Boolean,
+    onToggle: () -> Unit,
+    forWhat: String,
+) {
+    val video = vm.video
+    if (video != null) {
+        if (video.needsNote) {
+            LowConfidenceNote()
+            Spacer(Modifier.height(TindiDims.space3))
+        }
+        VideoHelperPanel(video, open, onToggle, notice, vm::useAsIngredients, vm::useAsSteps)
+    } else {
+        vm.sourceText?.let { SourceTextCard(it, forWhat) }
     }
 }
