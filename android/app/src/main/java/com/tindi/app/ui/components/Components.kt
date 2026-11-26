@@ -167,6 +167,16 @@ fun IconBtn(icon: TIcon, contentDescription: String, onClick: () -> Unit, modifi
     }
 }
 
+@Composable
+fun ThemeToggle(isDark: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    IconBtn(
+        icon = if (isDark) TIcon.Sun else TIcon.Moon,
+        contentDescription = if (isDark) "Switch to light mode" else "Switch to dark mode",
+        onClick = onToggle,
+        modifier = modifier,
+    )
+}
+
 /** A text row with a 48dp hit area. Used for small actions like "Clear filters". */
 @Composable
 fun TextAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: TIcon? = null) {

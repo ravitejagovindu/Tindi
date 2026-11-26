@@ -7,6 +7,7 @@ import com.tindi.app.data.remote.FetchResponseDto
 import com.tindi.app.data.remote.SuggestedDto
 import com.tindi.app.data.remote.TindiApi
 import com.tindi.app.data.remote.apiCall
+import com.tindi.app.data.remote.toDomain
 
 /** Maps a server error from POST /source/fetch onto what the user is told. Null means "not a YouTube link". */
 fun ApiError.toFetchFailure(): FetchFailure? = when {
@@ -41,6 +42,7 @@ internal fun SuggestedDto.toSuggestion() = Suggestion(
         },
         warnings = warnings,
     ),
+    stepDetails = stepDetails?.map { it.toDomain() },
 )
 
 internal fun FetchResponseDto.toVideoSource(s: Suggestion = suggested.toSuggestion()) = VideoSource(
@@ -56,6 +58,7 @@ internal fun FetchResponseDto.toVideoSource(s: Suggestion = suggested.toSuggesti
     foundIn = s.foundIn,
     method = s.info.method,
     warnings = s.info.warnings,
+    suggestedStepDetails = s.stepDetails,
 )
 
 /** Asks the Tindi server (which uses the official YouTube Data API). Never throws. */

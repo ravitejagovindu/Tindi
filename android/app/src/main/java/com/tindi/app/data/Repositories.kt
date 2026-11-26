@@ -85,6 +85,7 @@ data class VideoSource(
     val foundIn: FoundIn,
     val method: Method = Method.Unknown,
     val warnings: List<String> = emptyList(),
+    val suggestedStepDetails: List<StepDetail>? = null,
 )
 
 /** Why a fetch failed. Each one has a message for the user in [FetchFailure.message]. */

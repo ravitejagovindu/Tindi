@@ -42,6 +42,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tindi.app.AppContainer
+import com.tindi.app.DraftHolder
+import com.tindi.app.data.CategoryRepository
+import com.tindi.app.data.RecipeRepository
 import com.tindi.app.data.Category
 import com.tindi.app.data.Confidence
 import com.tindi.app.data.Ingredient
@@ -53,6 +56,7 @@ import com.tindi.app.data.VideoInfo
 import com.tindi.app.domain.RecipeList
 import com.tindi.app.domain.RecipeTextSplitter
 import com.tindi.app.domain.ReviewHints
+import com.tindi.app.domain.StepBasis
 import com.tindi.app.domain.needsHelp
 import com.tindi.app.data.remote.ApiError
 import com.tindi.app.data.remote.ApiResult
@@ -103,26 +107,32 @@ data class ReviewUiState(
     val saveError: String? = null,
     /** The server's banner and warnings. Stays empty when editing a saved recipe. */
     val hints: ReviewHints = ReviewHints(),
+    /** The step labels this review started with, and the lists they describe. Never shown, only saved. */
+    val stepBasis: StepBasis? = null,
 )
 
 /** Create mode (editId null) reads the draft from Add recipe. Edit mode starts from a saved recipe. */
-class ReviewViewModel(private val container: AppContainer, private val editId: String?) : ViewModel() {
+class ReviewViewModel(
+    private val recipes: RecipeRepository,
+    private val categoryRepository: CategoryRepository,
+    private val drafts: DraftHolder,
+    private val editId: String?,
+) : ViewModel() {
     val isEdit: Boolean = editId != null
-    val draft: StateFlow<RecipeDraft?> = container.draft.draft
+    val draft: StateFlow<RecipeDraft?> = drafts.draft
 
     /** The text the recipe was pasted from. Only exists when creating from pasted text. */
-    val sourceText: String? = if (isEdit) null else container.draft.draft.value?.sourceText
+    val sourceText: String? = if (isEdit) null else drafts.draft.value?.sourceText
 
     /** What the server found for a YouTube link. Drives the "From the video" panel. */
-    val video: VideoInfo? = if (isEdit) null else container.draft.draft.value?.video
+    val video: VideoInfo? = if (isEdit) null else drafts.draft.value?.video
 
     /** The server found no recipe, so the source text is what the user works from. */
-    val nothingFound: Boolean =
-        !isEdit && container.draft.draft.value?.suggestion?.confidence == Confidence.None
+    val nothingFound: Boolean = !isEdit && drafts.draft.value?.suggestion?.confidence == Confidence.None
 
     var saved = false
         private set
-    val categories: StateFlow<List<Category>> = container.categories.categories
+    val categories: StateFlow<List<Category>> = categoryRepository.categories
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _state = MutableStateFlow(initial())
@@ -131,11 +141,12 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
     private fun fromRecipe(r: Recipe) = ReviewUiState(
         name = r.name, categoryIds = r.categoryIds.toSet(), ingredients = r.ingredients, steps = r.steps,
         sourceType = r.sourceType, sourceUrl = r.sourceUrl, thumbnailUrl = r.thumbnailUrl,
+        stepBasis = StepBasis.of(r.ingredients, r.steps, r.stepDetails),
     )
 
     private fun initial(): ReviewUiState {
         if (editId == null) {
-            val d = container.draft.draft.value
+            val d = drafts.draft.value
             return ReviewUiState(
                 hints = ReviewHints.from(d?.suggestion, d?.ingredients?.size ?: 0, d?.steps?.size ?: 0),
                 name = d?.title.orEmpty(),
@@ -145,9 +156,10 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
                 sourceUrl = d?.sourceUrl,
                 channel = d?.video?.channel,
                 thumbnailUrl = d?.video?.thumbnailUrl,
+                stepBasis = d?.let { StepBasis.of(it.ingredients, it.steps, it.stepDetails) },
             )
         }
-        val cached = container.recipes.recipes.value.firstOrNull { it.id == editId }
+        val cached = recipes.recipes.value.firstOrNull { it.id == editId }
         return if (cached != null) fromRecipe(cached) else ReviewUiState(ready = false)
     }
 
@@ -159,7 +171,7 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         val id = editId ?: return
         _state.update { it.copy(loadError = null) }
         viewModelScope.launch {
-            when (val r = container.recipes.get(id)) {
+            when (val r = recipes.get(id)) {
                 is ApiResult.Ok -> _state.value = fromRecipe(r.value)
                 is ApiResult.Fail -> _state.update { it.copy(loadError = r.error.message) }
             }
@@ -184,10 +196,10 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
 
     /** Creates a category from the last step and ticks it, so the recipe saves straight into it. */
     suspend fun createCategoryAndSelect(name: String): String? {
-        val error = container.categories.create(name)
+        val error = categoryRepository.create(name)
         if (error == null) {
             val made = categories.value.lastOrNull { it.name.equals(name.trim(), ignoreCase = true) && !it.builtIn }
-                ?: container.categories.categories.value.lastOrNull { it.name.equals(name.trim(), ignoreCase = true) }
+                ?: categoryRepository.categories.value.lastOrNull { it.name.equals(name.trim(), ignoreCase = true) }
             if (made != null) _state.update { it.copy(categoryIds = it.categoryIds + made.id) }
         }
         return error
@@ -288,12 +300,13 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
                         sourceType = s.sourceType,
                         sourceUrl = s.sourceUrl,
                         thumbnailUrl = s.thumbnailUrl,
+                        stepDetails = s.stepBasis?.detailsFor(s.ingredients, s.steps),
                     )
-                    val result = if (editId == null) container.recipes.create(input) else container.recipes.update(editId, input)
+                    val result = if (editId == null) recipes.create(input) else recipes.update(editId, input)
                     when (result) {
                         is ApiResult.Ok -> {
                             saved = true
-                            if (editId == null) container.draft.set(null)
+                            if (editId == null) drafts.set(null)
                             _state.update { it.copy(busy = false) }
                             onSaved()
                         }
@@ -308,7 +321,9 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> Unit, onSaved: () -> Unit) {
-    val vm = appViewModel(key = "review-${editId ?: "new"}") { ReviewViewModel(container, editId) }
+    val vm = appViewModel(key = "review-${editId ?: "new"}") {
+        ReviewViewModel(container.recipes, container.categories, container.draft, editId)
+    }
     val s by vm.state.collectAsStateWithLifecycle()
     val draft by vm.draft.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()

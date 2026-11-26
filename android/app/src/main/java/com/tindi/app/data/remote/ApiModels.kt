@@ -5,6 +5,7 @@ import com.tindi.app.data.Ingredient
 import com.tindi.app.data.Recipe
 import com.tindi.app.data.RecipeInput
 import com.tindi.app.data.SourceType
+import com.tindi.app.data.StepDetail
 import kotlinx.serialization.Serializable
 
 @Serializable data class SignUpRequest(val name: String, val email: String, val password: String)
@@ -26,6 +27,13 @@ data class MeDto(
 @Serializable data class IngredientDto(val quantity: String = "", val item: String)
 
 @Serializable
+data class StepDetailDto(
+    val name: String = "",
+    val ingredientIndexes: List<Int> = emptyList(),
+    val illustration: String = "GENERIC",
+)
+
+@Serializable
 data class RecipeDto(
     val id: String,
     val name: String,
@@ -35,6 +43,7 @@ data class RecipeDto(
     val sourceType: String = "PASTED",
     val sourceUrl: String? = null,
     val thumbnailUrl: String? = null,
+    val stepDetails: List<StepDetailDto>? = null,
 )
 
 @Serializable
@@ -46,7 +55,13 @@ data class RecipeRequest(
     val sourceType: String,
     val sourceUrl: String?,
     val thumbnailUrl: String? = null,
+    /** Null is sent as null, which the server reads like a missing field. */
+    val stepDetails: List<StepDetailDto>? = null,
 )
+
+fun StepDetailDto.toDomain() = StepDetail(name, ingredientIndexes, illustration)
+
+fun StepDetail.toDto() = StepDetailDto(name, ingredientIndexes, illustration)
 
 fun CategoryDto.toDomain() = Category(id, name, builtIn = starter)
 
@@ -59,6 +74,7 @@ fun RecipeDto.toDomain() = Recipe(
     sourceType = if (sourceType.equals("YOUTUBE", ignoreCase = true)) SourceType.YouTube else SourceType.Pasted,
     sourceUrl = sourceUrl,
     thumbnailUrl = thumbnailUrl,
+    stepDetails = stepDetails?.map { it.toDomain() },
 )
 
 fun RecipeInput.toRequest() = RecipeRequest(
@@ -69,6 +85,7 @@ fun RecipeInput.toRequest() = RecipeRequest(
     sourceType = if (sourceType == SourceType.YouTube) "YOUTUBE" else "PASTED",
     sourceUrl = sourceUrl?.takeIf { it.isNotBlank() },
     thumbnailUrl = thumbnailUrl?.takeIf { it.isNotBlank() },
+    stepDetails = stepDetails?.map { it.toDto() },
 )
 
 @Serializable data class FetchRequest(val url: String)
@@ -89,6 +106,7 @@ data class SuggestedDto(
     val foundIn: String = "NONE",
     val method: String = "",
     val warnings: List<String> = emptyList(),
+    val stepDetails: List<StepDetailDto>? = null,
 )
 
 @Serializable data class StructureRequest(val text: String)
