@@ -16,3 +16,8 @@ tindi.seed-sample-recipes=false
 # YouTube Data API v3 key for POST /api/v1/source/fetch (get one in Google Cloud Console).
 # Leave the placeholder to keep the fetch endpoint switched off (SOURCE_NOT_CONFIGURED).
 tindi.youtube-api-key=PASTE_YOUR_YOUTUBE_API_KEY_HERE
+
+# Gemini API key for recipe structuring (get one in Google AI Studio).
+# Leave the placeholder to skip the LLM and use the built-in rules splitter.
+tindi.gemini-api-key=PASTE_YOUR_GEMINI_API_KEY_HERE
+tindi.gemini-model=gemini-3.5-flash-lite

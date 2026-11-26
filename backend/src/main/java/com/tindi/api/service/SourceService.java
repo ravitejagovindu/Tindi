@@ -2,8 +2,11 @@ package com.tindi.api.service;
 
 import com.tindi.api.dto.SourceDtos.CommentDto;
 import com.tindi.api.dto.SourceDtos.FetchResponse;
-import com.tindi.api.dto.SourceDtos.SuggestedDto;
+import com.tindi.api.dto.SourceDtos.StructureResponse;
+import com.tindi.api.service.GroundingCheck.Kind;
+import com.tindi.api.service.GroundingCheck.Source;
 import com.tindi.api.web.ApiException;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -11,10 +14,16 @@ import org.springframework.stereotype.Service;
 @Service
 public class SourceService {
     private final YouTubeClient youtube;
-    private final RecipeSplitter splitter = new RecipeSplitter();
+    private final RecipeStructurer structurer;
 
-    public SourceService(YouTubeClient youtube) {
+    public SourceService(YouTubeClient youtube, RecipeStructurer structurer) {
         this.youtube = youtube;
+        this.structurer = structurer;
+    }
+
+    /** Pasted text: one source, no YouTube call. */
+    public StructureResponse structure(String text) {
+        return new StructureResponse(structurer.structure("pasted", List.of(new Source(Kind.PASTED, text))));
     }
 
     public FetchResponse fetch(String url) {
@@ -31,9 +40,12 @@ public class SourceService {
                 .map(c -> new CommentDto(c.author(), c.text(), c.likeCount(),
                         !c.authorChannelId().isEmpty() && c.authorChannelId().equals(video.channelId())))
                 .toList();
-        RecipeSplitter.Result r = splitter.split(video.description(), comments.stream().map(YouTubeClient.Comment::text).toList());
+        List<Source> sources = new ArrayList<>();
+        sources.add(new Source(Kind.TITLE, video.title()));
+        sources.add(new Source(Kind.DESCRIPTION, video.description()));
+        comments.forEach(c -> sources.add(new Source(Kind.COMMENT, c.text())));
         return new FetchResponse(video.title(), video.channelName(), video.thumbnailUrl(),
                 YouTubeUrl.canonical(videoId), "YOUTUBE", video.description(), dtos,
-                new SuggestedDto(r.ingredients(), r.steps(), r.confidence().name(), r.foundIn().name()));
+                structurer.structure(videoId, sources));
     }
 }

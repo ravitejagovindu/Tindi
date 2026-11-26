@@ -16,7 +16,13 @@ public final class SourceDtos {
 
     public record CommentDto(String author, String text, int likeCount, boolean isPinnedLikely) {}
 
-    public record SuggestedDto(List<String> ingredients, List<String> steps, String confidence, String foundIn) {}
+    public record SuggestedDto(List<String> ingredients, List<String> steps, String confidence, String foundIn,
+                               String method, List<String> warnings) {}
+
+    public record StructureRequest(
+            @NotBlank(message = "Paste the recipe text") @Size(max = 20000, message = "That text is too long") String text) {}
+
+    public record StructureResponse(SuggestedDto suggested) {}
 
     public record FetchResponse(
             String title,
