@@ -64,6 +64,7 @@ import com.tindi.app.ui.components.ThemeToggle
 import com.tindi.app.ui.components.TindiTabs
 import com.tindi.app.ui.components.TindiSheet
 import com.tindi.app.ui.theme.LocalThemeControl
+import com.tindi.app.domain.thumbnail
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.TindiDims
 import com.tindi.app.ui.theme.TindiType
@@ -188,7 +189,7 @@ fun RecipeScreen(
                     .height(TindiDims.heroH)
                     .clip(RoundedCornerShape(bottomStart = TindiDims.radiusCard, bottomEnd = TindiDims.radiusCard)),
             ) {
-                PlateIllustration(recipeVariant(recipe.id), Modifier.fillMaxSize())
+                RemoteThumbnail(recipe.thumbnail, Modifier.fillMaxSize(), recipeVariant(recipe.id))
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = TindiDims.space5, vertical = TindiDims.space3),
                     horizontalArrangement = Arrangement.SpaceBetween,

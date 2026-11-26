@@ -57,11 +57,11 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 
-private val thumbCache = object : LruCache<String, Bitmap>(24) {}
+private val thumbCache = object : LruCache<String, Bitmap>(64) {}
 
 /** Thumbnail from an https URL. Shows the plate illustration while loading and if it cannot be loaded. */
 @Composable
-fun RemoteThumbnail(url: String?, modifier: Modifier = Modifier) {
+fun RemoteThumbnail(url: String?, modifier: Modifier = Modifier, fallbackVariant: Int = 0) {
     val bitmap by produceState<Bitmap?>(initialValue = url?.let { thumbCache.get(it) }, url) {
         if (url == null || value != null) return@produceState
         value = withContext(Dispatchers.IO) {
@@ -84,7 +84,7 @@ fun RemoteThumbnail(url: String?, modifier: Modifier = Modifier) {
     if (b != null) {
         Image(b.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier)
     } else {
-        PlateIllustration(0, modifier)
+        PlateIllustration(fallbackVariant, modifier)
     }
 }
 

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -86,6 +87,10 @@ fun TindiRoot(container: AppContainer) {
 @Composable
 private fun MainNav(container: AppContainer) {
     val nav = rememberNavController()
+    val shared by container.shared.item.collectAsStateWithLifecycle()
+    LaunchedEffect(shared) {
+        if (shared != null) nav.navigate(Routes.ADD) { launchSingleTop = true }
+    }
     Box(Modifier.fillMaxSize().statusBarsPadding().imePadding().navigationBarsPadding()) {
         AppNavHost(nav, container)
     }

@@ -73,6 +73,7 @@ public class RecipeService {
         r.setSteps(json.writeValueAsString(req.steps()));
         r.setSourceType(req.sourceType());
         r.setSourceUrl(req.sourceUrl());
+        r.setThumbnailUrl(req.thumbnailUrl());
         r.getCategoryIds().clear();
         r.getCategoryIds().addAll(cats);
     }
@@ -93,6 +94,6 @@ public class RecipeService {
         List<IngredientDto> ing = json.readValue(r.getIngredients(), new TypeReference<List<IngredientDto>>() {});
         List<String> steps = json.readValue(r.getSteps(), new TypeReference<List<String>>() {});
         return new RecipeDto(r.getId(), r.getName(), ing, steps, r.getCategoryIds().stream().sorted().toList(),
-                r.getSourceType(), r.getSourceUrl(), r.getCreatedAt(), r.getUpdatedAt());
+                r.getSourceType(), r.getSourceUrl(), r.getThumbnailUrl(), r.getCreatedAt(), r.getUpdatedAt());
     }
 }

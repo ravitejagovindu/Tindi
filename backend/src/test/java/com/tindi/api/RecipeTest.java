@@ -36,6 +36,35 @@ class RecipeTest extends ApiTestBase {
     }
 
     @Test
+    void thumbnailUrlIsStoredReturnedClearedAndMustBeHttps() {
+        String t = newUser("Ravi")[0];
+        Map<String, Object> body = new HashMap<>(recipeBody("Thumb", List.of()));
+        body.put("sourceType", "YOUTUBE");
+        body.put("sourceUrl", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        body.put("thumbnailUrl", "  https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg ");
+        Resp a = call("POST", "/recipes", t, body);
+        assertEquals(201, a.status());
+        assertEquals("https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg", a.text("thumbnailUrl"));
+        assertEquals("https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+                call("GET", "/recipes/" + a.text("id"), t, null).text("thumbnailUrl"));
+
+        body.put("thumbnailUrl", "http://insecure.example/x.jpg");
+        Resp bad = call("PUT", "/recipes/" + a.text("id"), t, body);
+        assertEquals(400, bad.status());
+        assertEquals("VALIDATION_FAILED", bad.body().get("error").get("code").asString());
+        assertTrue(bad.body().get("error").get("fields").has("thumbnailUrl"));
+
+        body.put("thumbnailUrl", "javascript:alert(1)");
+        assertEquals(400, call("PUT", "/recipes/" + a.text("id"), t, body).status());
+
+        body.remove("thumbnailUrl");
+        Resp cleared = call("PUT", "/recipes/" + a.text("id"), t, body);
+        assertEquals(200, cleared.status());
+        assertTrue(cleared.body().get("thumbnailUrl").isNull());
+        assertTrue(call("POST", "/recipes", t, recipeBody("Plain", List.of())).body().get("thumbnailUrl").isNull());
+    }
+
+    @Test
     void putReplacesEverything() {
         String t = newUser("Ravi")[0];
         String dinner = starterId(t, "Dinner");

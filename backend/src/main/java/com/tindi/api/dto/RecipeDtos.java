@@ -4,6 +4,7 @@ import com.tindi.api.domain.SourceType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
@@ -30,16 +31,19 @@ public final class RecipeDtos {
             String> steps,
             List<String> categoryIds,
             @NotNull(message = "Choose a source type") SourceType sourceType,
-            @Size(max = 2048, message = "Use 2048 characters or fewer") String sourceUrl) {
+            @Size(max = 2048, message = "Use 2048 characters or fewer") String sourceUrl,
+            @Size(max = 2048, message = "Use 2048 characters or fewer")
+            @Pattern(regexp = "(?i)https://.+", message = "Use an https link") String thumbnailUrl) {
         public RecipeRequest {
             name = name == null ? null : name.trim();
             steps = steps == null ? null : steps.stream().map(s -> s == null ? null : s.trim()).toList();
             categoryIds = categoryIds == null ? List.of() : categoryIds;
             sourceUrl = sourceUrl == null || sourceUrl.isBlank() ? null : sourceUrl.trim();
+            thumbnailUrl = thumbnailUrl == null || thumbnailUrl.isBlank() ? null : thumbnailUrl.trim();
         }
     }
 
     public record RecipeDto(String id, String name, List<IngredientDto> ingredients, List<String> steps,
-                            List<String> categoryIds, SourceType sourceType, String sourceUrl,
+                            List<String> categoryIds, SourceType sourceType, String sourceUrl, String thumbnailUrl,
                             Instant createdAt, Instant updatedAt) {}
 }

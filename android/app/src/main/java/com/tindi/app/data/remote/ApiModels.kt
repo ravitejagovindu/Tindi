@@ -34,6 +34,7 @@ data class RecipeDto(
     val categoryIds: List<String> = emptyList(),
     val sourceType: String = "PASTED",
     val sourceUrl: String? = null,
+    val thumbnailUrl: String? = null,
 )
 
 @Serializable
@@ -44,6 +45,7 @@ data class RecipeRequest(
     val categoryIds: List<String>,
     val sourceType: String,
     val sourceUrl: String?,
+    val thumbnailUrl: String? = null,
 )
 
 fun CategoryDto.toDomain() = Category(id, name, builtIn = starter)
@@ -56,6 +58,7 @@ fun RecipeDto.toDomain() = Recipe(
     categoryIds = categoryIds,
     sourceType = if (sourceType.equals("YOUTUBE", ignoreCase = true)) SourceType.YouTube else SourceType.Pasted,
     sourceUrl = sourceUrl,
+    thumbnailUrl = thumbnailUrl,
 )
 
 fun RecipeInput.toRequest() = RecipeRequest(
@@ -65,6 +68,7 @@ fun RecipeInput.toRequest() = RecipeRequest(
     categoryIds = categoryIds,
     sourceType = if (sourceType == SourceType.YouTube) "YOUTUBE" else "PASTED",
     sourceUrl = sourceUrl?.takeIf { it.isNotBlank() },
+    thumbnailUrl = thumbnailUrl?.takeIf { it.isNotBlank() },
 )
 
 @Serializable data class FetchRequest(val url: String)
