@@ -44,6 +44,7 @@ import com.tindi.app.data.Category
 import com.tindi.app.data.Recipe
 import com.tindi.app.domain.filterRecipes
 import com.tindi.app.ui.components.CategoryChip
+import com.tindi.app.ui.components.IconBtn
 import com.tindi.app.ui.components.ExtendedFab
 import com.tindi.app.ui.components.Heading
 import com.tindi.app.ui.components.ErrorState
@@ -123,10 +124,9 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 }
 
 @Composable
-fun LibraryScreen(container: AppContainer, onOpenRecipe: (String) -> Unit, onAdd: () -> Unit) {
+fun LibraryScreen(container: AppContainer, onOpenRecipe: (String) -> Unit, onAdd: () -> Unit, onOpenProfile: () -> Unit) {
     val vm = appViewModel { LibraryViewModel(container) }
     val s by vm.state.collectAsStateWithLifecycle()
-    val theme = LocalThemeControl.current
     var showNew by remember { mutableStateOf(false) }
 
     // Fetch again each time the tab is opened. Quiet when recipes are already on screen.
@@ -139,7 +139,7 @@ fun LibraryScreen(container: AppContainer, onOpenRecipe: (String) -> Unit, onAdd
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Heading("Library", Modifier.weight(1f))
-                ThemeToggle(theme.isDark, theme.toggle)
+                IconBtn(TIcon.User, "Profile", onOpenProfile)
             }
 
             val firstRun = s.loaded && s.allRecipes.isEmpty()

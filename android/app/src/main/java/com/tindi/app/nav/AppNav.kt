@@ -27,11 +27,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.tindi.app.AppContainer
-import com.tindi.app.ui.components.BottomNav
-import com.tindi.app.ui.components.NavItem
 import com.tindi.app.ui.screens.AuthScreen
 import com.tindi.app.ui.screens.AddRecipeScreen
-import com.tindi.app.ui.screens.CategoriesScreen
 import com.tindi.app.ui.screens.CookingScreen
 import com.tindi.app.ui.screens.ReviewScreen
 import com.tindi.app.ui.screens.LibraryScreen
@@ -44,7 +41,6 @@ import com.tindi.app.ui.theme.TindiTheme
 
 object Routes {
     const val LIBRARY = "library"
-    const val CATEGORIES = "categories"
     const val PROFILE = "profile"
     const val ADD = "add"
     const val REVIEW = "review"
@@ -90,30 +86,8 @@ fun TindiRoot(container: AppContainer) {
 @Composable
 private fun MainNav(container: AppContainer) {
     val nav = rememberNavController()
-    val entry by nav.currentBackStackEntryAsState()
-    val route = entry?.destination?.route
-    val showNav = route == Routes.LIBRARY || route == Routes.CATEGORIES || route == Routes.PROFILE
-    val imeOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-
-    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-        Box(
-            Modifier
-                .weight(1f)
-                .then(if (showNav && !imeOpen) Modifier else Modifier.navigationBarsPadding()),
-        ) {
-            AppNavHost(nav, container)
-        }
-        if (showNav && !imeOpen) {
-            BottomNav(currentRoute = route) { item -> nav.switchTab(item) }
-        }
-    }
-}
-
-private fun NavHostController.switchTab(item: NavItem) {
-    navigate(item.route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
+    Box(Modifier.fillMaxSize().statusBarsPadding().imePadding().navigationBarsPadding()) {
+        AppNavHost(nav, container)
     }
 }
 
@@ -121,7 +95,10 @@ private fun NavHostController.switchTab(item: NavItem) {
 private fun AppNavHost(nav: NavHostController, container: AppContainer) {
     NavHost(navController = nav, startDestination = Routes.LIBRARY) {
         composable(Routes.LIBRARY) {
-            LibraryScreen(container, onOpenRecipe = { nav.navigate(Routes.recipe(it)) }, onAdd = { nav.navigate(Routes.ADD) })
+            LibraryScreen(
+                container, onOpenRecipe = { nav.navigate(Routes.recipe(it)) }, onAdd = { nav.navigate(Routes.ADD) },
+                onOpenProfile = { nav.navigate(Routes.PROFILE) },
+            )
         }
         composable(Routes.RECIPE) { e ->
             val id = e.arguments?.getString("id").orEmpty()
@@ -140,7 +117,6 @@ private fun AppNavHost(nav: NavHostController, container: AppContainer) {
                 onFinish = { nav.popBackStack(Routes.LIBRARY, inclusive = false) },
             )
         }
-        composable(Routes.CATEGORIES) { CategoriesScreen(container) }
         composable(Routes.ADD) {
             AddRecipeScreen(container, onBack = { nav.popBackStack() }, onUseText = { nav.navigate(Routes.REVIEW) })
         }
@@ -155,7 +131,7 @@ private fun AppNavHost(nav: NavHostController, container: AppContainer) {
             val id = e.arguments?.getString("id").orEmpty()
             ReviewScreen(container, editId = id, onBack = { nav.popBackStack() }, onSaved = { nav.popBackStack() })
         }
-        composable(Routes.PROFILE) { ProfileScreen(container) }
+        composable(Routes.PROFILE) { ProfileScreen(container, onBack = { nav.popBackStack() }) }
     }
 }
 

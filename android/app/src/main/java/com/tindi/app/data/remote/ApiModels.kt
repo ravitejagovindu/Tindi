@@ -66,3 +66,33 @@ fun RecipeInput.toRequest() = RecipeRequest(
     sourceType = if (sourceType == SourceType.YouTube) "YOUTUBE" else "PASTED",
     sourceUrl = sourceUrl?.takeIf { it.isNotBlank() },
 )
+
+@Serializable data class FetchRequest(val url: String)
+
+@Serializable
+data class SourceCommentDto(
+    val author: String = "",
+    val text: String = "",
+    val likeCount: Int = 0,
+    val isPinnedLikely: Boolean = false,
+)
+
+@Serializable
+data class SuggestedDto(
+    val ingredients: List<String> = emptyList(),
+    val steps: List<String> = emptyList(),
+    val confidence: String = "NONE",
+    val foundIn: String = "NONE",
+)
+
+@Serializable
+data class FetchResponseDto(
+    val title: String = "",
+    val channelName: String = "",
+    val thumbnailUrl: String? = null,
+    val sourceUrl: String,
+    val sourceType: String = "YOUTUBE",
+    val description: String = "",
+    val comments: List<SourceCommentDto> = emptyList(),
+    val suggested: SuggestedDto = SuggestedDto(),
+)

@@ -27,8 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,8 +48,12 @@ import com.tindi.app.data.Recipe
 import com.tindi.app.data.RecipeDraft
 import com.tindi.app.data.RecipeInput
 import com.tindi.app.data.SourceType
+import com.tindi.app.data.VideoInfo
+import com.tindi.app.domain.RecipeTextSplitter
+import com.tindi.app.domain.needsNote
 import com.tindi.app.data.remote.ApiError
 import com.tindi.app.data.remote.ApiResult
+import com.tindi.app.ui.components.CategoryChip
 import com.tindi.app.ui.components.CheckChip
 import com.tindi.app.ui.components.ErrorLine
 import com.tindi.app.ui.components.ErrorState
@@ -84,6 +89,10 @@ data class ReviewUiState(
     val steps: List<String> = emptyList(),
     val sourceType: SourceType = SourceType.Pasted,
     val sourceUrl: String? = null,
+    val channel: String? = null,
+    val thumbnailUrl: String? = null,
+    /** Short confirmation after "Use as ingredients / steps". */
+    val notice: String? = null,
     val qty: String = "",
     val item: String = "",
     val stepText: String = "",
@@ -96,8 +105,11 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
     val isEdit: Boolean = editId != null
     val draft: StateFlow<RecipeDraft?> = container.draft.draft
 
-    /** The text the recipe was made from. Only exists when creating. */
+    /** The text the recipe was pasted from. Only exists when creating from pasted text. */
     val sourceText: String? = if (isEdit) null else container.draft.draft.value?.sourceText
+
+    /** What the server found for a YouTube link. Drives the "From the video" panel. */
+    val video: VideoInfo? = if (isEdit) null else container.draft.draft.value?.video
 
     var saved = false
         private set
@@ -116,9 +128,13 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         if (editId == null) {
             val d = container.draft.draft.value
             return ReviewUiState(
-                name = d?.suggestedName.orEmpty(),
+                name = d?.title.orEmpty(),
+                ingredients = d?.ingredients.orEmpty(),
+                steps = d?.steps.orEmpty(),
                 sourceType = d?.sourceType ?: SourceType.Pasted,
                 sourceUrl = d?.sourceUrl,
+                channel = d?.video?.channel,
+                thumbnailUrl = d?.video?.thumbnailUrl,
             )
         }
         val cached = container.recipes.recipes.value.firstOrNull { it.id == editId }
@@ -140,10 +156,32 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         }
     }
 
-    fun setTab(i: Int) = _state.update { it.copy(tab = i) }
+    fun setTab(i: Int) = _state.update { it.copy(tab = i, notice = null) }
+
+    /** Wizard step for new recipes: Details -> Ingredients -> Steps. */
+    fun next() = _state.update {
+        when {
+            it.tab == 0 && it.name.isBlank() -> it.copy(nameError = "Give the recipe a name.")
+            it.tab < 3 -> it.copy(tab = it.tab + 1, notice = null, saveError = null, nameError = null)
+            else -> it
+        }
+    }
+
+    fun previous() = _state.update { it.copy(tab = (it.tab - 1).coerceAtLeast(0), notice = null, saveError = null) }
     fun setName(v: String) = _state.update { it.copy(name = v, nameError = null, saveError = null) }
     fun toggleCategory(id: String, on: Boolean) =
         _state.update { it.copy(categoryIds = if (on) it.categoryIds + id else it.categoryIds - id) }
+
+    /** Creates a category from the last step and ticks it, so the recipe saves straight into it. */
+    suspend fun createCategoryAndSelect(name: String): String? {
+        val error = container.categories.create(name)
+        if (error == null) {
+            val made = categories.value.lastOrNull { it.name.equals(name.trim(), ignoreCase = true) && !it.builtIn }
+                ?: container.categories.categories.value.lastOrNull { it.name.equals(name.trim(), ignoreCase = true) }
+            if (made != null) _state.update { it.copy(categoryIds = it.categoryIds + made.id) }
+        }
+        return error
+    }
 
     fun setQty(v: String) = _state.update { it.copy(qty = v) }
     fun setItem(v: String) = _state.update { it.copy(item = v) }
@@ -166,6 +204,32 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
 
     fun removeStep(i: Int) = _state.update { it.copy(steps = it.steps.filterIndexed { n, _ -> n != i }) }
 
+    /** Replaces the ingredient list with the lines of [text] (its ingredients section if it has one). */
+    fun useAsIngredients(text: String) {
+        val lines = RecipeTextSplitter.asIngredients(text)
+        _state.update {
+            if (lines.isEmpty()) it.copy(notice = "Nothing to use in that text.")
+            else it.copy(
+                ingredients = lines.map(RecipeTextSplitter::parseIngredient), saveError = null,
+                notice = "Ingredients filled with ${lines.size} lines. Check them in the Ingredients tab.",
+            )
+        }
+    }
+
+    /** Replaces the steps with the lines of [text] (its method section if it has one). */
+    fun useAsSteps(text: String) {
+        val lines = RecipeTextSplitter.asSteps(text)
+        _state.update {
+            if (lines.isEmpty()) it.copy(notice = "Nothing to use in that text.")
+            else it.copy(
+                steps = lines, saveError = null,
+                notice = "Steps filled with ${lines.size} lines. Check them in the Steps tab.",
+            )
+        }
+    }
+
+    fun clearNotice() = _state.update { it.copy(notice = null) }
+
     /** Puts a server rejection where the user can see it: the name field, or the tab that holds the bad row. */
     private fun withServerError(s: ReviewUiState, e: ApiError): ReviewUiState {
         val name = e.fields["name"]
@@ -173,7 +237,7 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
             name != null -> 0
             e.fields.keys.any { it.startsWith("ingredients") } -> 1
             e.fields.keys.any { it.startsWith("steps") } -> 2
-            e.fields.keys.any { it.startsWith("categoryIds") } -> 0
+            e.fields.keys.any { it.startsWith("categoryIds") } -> 3
             else -> s.tab
         }
         val line = if (e.code == "VALIDATION_FAILED") e.fields.values.firstOrNull() ?: e.message else e.message
@@ -186,9 +250,6 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         when {
             s.name.isBlank() -> _state.update {
                 it.copy(tab = 0, nameError = "Give the recipe a name.", saveError = "Add a name before saving.")
-            }
-            s.ingredients.isEmpty() -> _state.update {
-                it.copy(tab = 1, saveError = "Add at least one ingredient.")
             }
             s.steps.isEmpty() -> _state.update {
                 it.copy(tab = 2, saveError = "Add at least one step.")
@@ -228,6 +289,8 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
     val draft by vm.draft.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val c = Tindi.colors
+    var helperOpen by rememberSaveable { mutableStateOf(vm.video?.needsNote == true) }
+    var showNewCategory by remember { mutableStateOf(false) }
 
     // The draft only lives in memory. If it is gone (process death, logout), go back to Add recipe.
     if (!vm.isEdit) {
@@ -241,7 +304,7 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(TindiDims.space3),
         ) {
-            IconBtn(TIcon.ArrowLeft, "Back", onBack)
+            IconBtn(TIcon.ArrowLeft, "Back", { if (!vm.isEdit && s.ready && s.tab > 0) vm.previous() else onBack() })
             Heading(if (vm.isEdit) "Edit recipe" else "Review recipe", style = TindiType.titleMd)
         }
         if (!s.ready) {
@@ -256,7 +319,7 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
             return@Column
         }
         Box(Modifier.padding(horizontal = TindiDims.space5)) {
-            TindiTabs(listOf("Details", "Ingredients", "Steps"), s.tab, vm::setTab)
+            TindiTabs(listOf("Details", "Ingredients", "Steps", "Category"), s.tab, vm::setTab)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.line))
 
@@ -269,22 +332,18 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
         ) {
             when (s.tab) {
                 0 -> {
+                    if (vm.video != null) {
+                        VideoSummaryCard(s.channel, s.thumbnailUrl, s.sourceUrl)
+                        Spacer(Modifier.height(TindiDims.space5))
+                        if (vm.video.needsNote) {
+                            LowConfidenceNote()
+                            Spacer(Modifier.height(TindiDims.space5))
+                        }
+                    }
                     TindiTextField(
                         label = "Recipe name", value = s.name, onValueChange = vm::setName, error = s.nameError,
                         placeholder = "For example, Paneer Butter Masala",
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    )
-                    Spacer(Modifier.height(TindiDims.space5))
-                    Text("Categories", style = TindiType.caption.copy(color = c.muted))
-                    Spacer(Modifier.height(TindiDims.space1))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(TindiDims.space2)) {
-                        categories.forEach { cat ->
-                            CheckChip(cat.name, cat.id in s.categoryIds, { vm.toggleCategory(cat.id, it) })
-                        }
-                    }
-                    Text(
-                        "Pick none to save it as Uncategorised.",
-                        style = TindiType.caption.copy(color = c.muted),
                     )
                     Spacer(Modifier.height(TindiDims.space5))
                     Text(
@@ -293,7 +352,7 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     )
                 }
                 1 -> {
-                    vm.sourceText?.let { SourceTextCard(it, "ingredients") }
+                    SourceHelp(vm, s.notice, helperOpen, { helperOpen = !helperOpen }, "ingredients")
                     Spacer(Modifier.height(TindiDims.space4))
                     s.ingredients.forEachIndexed { i, ing ->
                         ListRow(ing.display, "Remove ingredient ${ing.display}") { vm.removeIngredient(i) }
@@ -314,8 +373,8 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     Spacer(Modifier.height(TindiDims.space3))
                     SecondaryButton("Add ingredient", vm::addIngredient, icon = TIcon.Plus, enabled = s.item.isNotBlank())
                 }
-                else -> {
-                    vm.sourceText?.let { SourceTextCard(it, "steps") }
+                2 -> {
+                    SourceHelp(vm, s.notice, helperOpen, { helperOpen = !helperOpen }, "steps")
                     Spacer(Modifier.height(TindiDims.space4))
                     s.steps.forEachIndexed { i, step ->
                         ListRow("${i + 1}. $step", "Remove step ${i + 1}") { vm.removeStep(i) }
@@ -328,6 +387,21 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     Spacer(Modifier.height(TindiDims.space3))
                     SecondaryButton("Add step", vm::addStep, icon = TIcon.Plus, enabled = s.stepText.isNotBlank())
                 }
+                else -> {
+                    Text("Where should it go?", style = TindiType.titleSm.copy(color = c.ink))
+                    Spacer(Modifier.height(TindiDims.space2))
+                    Text(
+                        "Pick one or more. Pick none to save it as Uncategorised.",
+                        style = TindiType.caption.copy(color = c.muted),
+                    )
+                    Spacer(Modifier.height(TindiDims.space4))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(TindiDims.space2)) {
+                        categories.forEach { cat ->
+                            CheckChip(cat.name, cat.id in s.categoryIds, { vm.toggleCategory(cat.id, it) })
+                        }
+                        CategoryChip("New", false, { showNewCategory = true }, dashed = true, leadingIcon = TIcon.Plus)
+                    }
+                }
             }
         }
 
@@ -338,12 +412,26 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     ErrorLine(s.saveError.orEmpty())
                     Spacer(Modifier.height(TindiDims.space2))
                 }
-                PrimaryButton(
-                    if (s.busy) "Saving" else if (vm.isEdit) "Save changes" else "Save recipe",
-                    onClick = { vm.save(onSaved) }, icon = TIcon.Check, enabled = !s.busy,
-                )
+                if (!vm.isEdit && s.tab < 3) {
+                    PrimaryButton(
+                        when (s.tab) { 0 -> "Next: ingredients"; 1 -> "Next: steps"; else -> "Next: category" },
+                        onClick = vm::next, icon = TIcon.ArrowRight,
+                    )
+                } else {
+                    PrimaryButton(
+                        if (s.busy) "Saving" else if (vm.isEdit) "Save changes" else "Save recipe",
+                        onClick = { vm.save(onSaved) }, icon = TIcon.Check, enabled = !s.busy,
+                    )
+                }
             }
         }
+    }
+
+    if (showNewCategory) {
+        NewCategorySheet(
+            onDismiss = { showNewCategory = false },
+            onCreate = { name -> vm.createCategoryAndSelect(name) },
+        )
     }
 }
 
@@ -409,5 +497,26 @@ private fun SourceTextCard(text: String, forWhat: String) {
                 )
             }
         }
+    }
+}
+
+/** Under the Ingredients and Steps tabs: the video helper for YouTube recipes, the pasted text for pasted ones. */
+@Composable
+private fun SourceHelp(
+    vm: ReviewViewModel,
+    notice: String?,
+    open: Boolean,
+    onToggle: () -> Unit,
+    forWhat: String,
+) {
+    val video = vm.video
+    if (video != null) {
+        if (video.needsNote) {
+            LowConfidenceNote()
+            Spacer(Modifier.height(TindiDims.space3))
+        }
+        VideoHelperPanel(video, open, onToggle, notice, vm::useAsIngredients, vm::useAsSteps)
+    } else {
+        vm.sourceText?.let { SourceTextCard(it, forWhat) }
     }
 }
