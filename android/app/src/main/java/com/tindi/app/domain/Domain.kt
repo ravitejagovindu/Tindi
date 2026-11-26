@@ -2,7 +2,6 @@ package com.tindi.app.domain
 
 import com.tindi.app.data.AuthErrors
 import com.tindi.app.data.Categories
-import com.tindi.app.data.Ingredient
 import com.tindi.app.data.Recipe
 
 /**
@@ -51,16 +50,6 @@ object AuthValidator {
             else -> null
         }
         return if (n != null || e != null || p != null) AuthErrors(name = n, email = e, password = p) else null
-    }
-}
-
-/** Ingredients a step mentions, for the Cooking view "You need" panel. */
-fun ingredientsForStep(step: String, ingredients: List<Ingredient>): List<Ingredient> {
-    val text = step.lowercase()
-    return ingredients.filter { ing ->
-        val key = ing.item.substringBefore(',').trim().lowercase()
-        val words = key.split(' ').filter { it.length > 2 }
-        key.isNotEmpty() && (text.contains(key) || words.any { w -> text.contains(w.removeSuffix("s")) })
     }
 }
 

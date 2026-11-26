@@ -147,7 +147,7 @@ object RecipeTextSplitter {
     private val unitWords = "cups?|tbsp|tsp|tablespoons?|teaspoons?|kgs?|grams?|gms?|g|ml|ltrs?|litres?|liters?|l|oz|lbs?|pinch(?:es)?" +
         "|cloves?|pieces?|pcs|inch(?:es)?|bunch(?:es)?|handfuls?|sprigs?|slices?|cans?|packets?|sticks?"
     private val quantity = Regex(
-        "^((?:\\d+(?:[./]\\d+)?|[\\u00bc-\\u00be\\u2150-\\u215e])(?:\\s*(?:-|to)\\s*(?:\\d+(?:[./]\\d+)?|[\\u00bc-\\u00be\\u2150-\\u215e]))?" +
+        "^((?:\\d+(?:[./]\\d+)?|[\\u00bc-\\u00be\\u2150-\\u215e])(?:\\s+\\d+/\\d+)?(?:\\s*(?:-|to)\\s*(?:\\d+(?:[./]\\d+)?|[\\u00bc-\\u00be\\u2150-\\u215e]))?" +
             "(?:\\s*[\\u00bc-\\u00be\\u2150-\\u215e])?(?:\\s*(?:$unitWords)\\b\\.?)?)\\s+(.+)$",
         opts,
     )
@@ -170,6 +170,7 @@ fun draftFromVideo(src: VideoSource) = RecipeDraft(
     steps = src.suggestedSteps,
     video = VideoInfo(src.title, src.channel, src.thumbnailUrl, src.description, src.comments, src.confidence, src.foundIn),
     suggestion = SuggestionInfo(src.method, src.confidence, src.warnings),
+    stepDetails = src.suggestedStepDetails,
 )
 
 /** Builds the Review draft for pasted text the server sorted. The lists may be empty: the user fills them in. */
@@ -180,6 +181,7 @@ fun draftFromStructured(text: String, s: Suggestion) = RecipeDraft(
     steps = s.steps,
     sourceText = text.trim(),
     suggestion = s.info,
+    stepDetails = s.stepDetails,
 )
 
 /** Builds the Review draft for pasted text with no network call, for when the server cannot be used. */

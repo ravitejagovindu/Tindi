@@ -119,7 +119,7 @@ private fun AppNavHost(nav: NavHostController, container: AppContainer) {
             CookingScreen(
                 container, id,
                 onClose = { nav.popBackStack() },
-                onFinish = { nav.popBackStack(Routes.LIBRARY, inclusive = false) },
+                onBackToLibrary = { nav.popBackStack(Routes.LIBRARY, inclusive = false) },
             )
         }
         composable(Routes.ADD) {

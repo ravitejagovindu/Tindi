@@ -10,6 +10,18 @@ data class Ingredient(val quantity: String, val item: String) {
     val display: String get() = if (quantity.isBlank()) item else "$quantity $item"
 }
 
+/**
+ * The server's labels for one step (`stepDetails` in backend/API.md). A list of these is parallel to the steps.
+ * [ingredientIndexes] are positions in the ingredient list. [illustration] stays the server's text so that a value
+ * this app does not know yet survives a save unchanged.
+ */
+@Serializable
+data class StepDetail(
+    val name: String = "",
+    val ingredientIndexes: List<Int> = emptyList(),
+    val illustration: String = "GENERIC",
+)
+
 @Serializable
 data class Recipe(
     val id: String,
@@ -22,6 +34,8 @@ data class Recipe(
     val sourceUrl: String? = null,
     /** Address of the video thumbnail (https), or null. Use [Recipe.thumbnail] to show it. */
     val thumbnailUrl: String? = null,
+    /** One entry per step, or null: older recipes have none and show their plain steps. */
+    val stepDetails: List<StepDetail>? = null,
 )
 
 @Serializable
@@ -42,6 +56,7 @@ data class RecipeInput(
     val sourceType: SourceType,
     val sourceUrl: String?,
     val thumbnailUrl: String? = null,
+    val stepDetails: List<StepDetail>? = null,
 )
 
 object Categories {
@@ -73,6 +88,8 @@ data class RecipeDraft(
     val video: VideoInfo? = null,
     /** How the server made the prefilled lists. Null when they were split on the phone. */
     val suggestion: SuggestionInfo? = null,
+    /** The server's step labels for [steps], pointing into [ingredients]. */
+    val stepDetails: List<StepDetail>? = null,
 )
 
 /** The video details Review shows and the helper panel works from. */
@@ -108,4 +125,5 @@ data class Suggestion(
     val steps: List<String>,
     val foundIn: FoundIn,
     val info: SuggestionInfo,
+    val stepDetails: List<StepDetail>? = null,
 )
