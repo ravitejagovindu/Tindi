@@ -34,6 +34,7 @@ class AppContainer(context: Context) {
 
     val themePrefs = ThemePrefs(context)
     val draft = DraftHolder()
+    val shared = SharedContent()
 
     init {
         // A half-made recipe must not outlive its session.
@@ -73,3 +74,23 @@ class TindiApp : Application() {
         container = AppContainer(this)
     }
 }
+
+/** What another app shared to Tindi (Share, then Tindi), waiting for Add recipe to pick it up. */
+class SharedContent {
+    private val _item = MutableStateFlow<SharedItem?>(null)
+    val item: StateFlow<SharedItem?> = _item
+
+    /** Takes the text of a share intent. A link goes to the fetch, other text to the paste box. */
+    fun offer(text: String?) {
+        val t = text?.trim().orEmpty()
+        if (t.isEmpty()) return
+        val link = LINK.find(t)?.value?.trimEnd('.', ',', ')', ']')
+        _item.value = if (link != null) SharedItem(link = link, text = null) else SharedItem(link = null, text = t)
+    }
+
+    fun clear() { _item.value = null }
+
+    private companion object { val LINK = Regex("https?://[^ \t\r\n]+", RegexOption.IGNORE_CASE) }
+}
+
+data class SharedItem(val link: String?, val text: String?)

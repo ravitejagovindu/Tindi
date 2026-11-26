@@ -43,6 +43,7 @@ A malformed body or a bad enum value (e.g. `sourceType`) is `VALIDATION_FAILED`;
 | ingredients | 0-100 items. `item` 1-120, `quantity` 0-40 (missing = `""`) |
 | steps | 0-100 items, each 1-1000 |
 | sourceUrl | optional, max 2048; blank becomes `null` |
+| thumbnailUrl | optional, max 2048, must start with `https://`; blank becomes `null`. Only the address is stored, never the image |
 | category name | 1-30, unique per user ignoring case, cannot equal a starter name |
 
 ## Auth
@@ -111,7 +112,7 @@ Recipe object:
  "ingredients":[{"quantity":"250 g","item":"Paneer"}],
  "steps":["Blend tomato and onion"],
  "categoryIds":["00000000-0000-4000-8000-000000000004","e734db4c-c242-441f-811e-140ee5fb4064"],
- "sourceType":"PASTED","sourceUrl":null,
+ "sourceType":"PASTED","sourceUrl":null,"thumbnailUrl":null,
  "createdAt":"2026-11-25T15:36:20.137879Z","updatedAt":"2026-11-25T15:36:20.137879Z"}
 ```
 `sourceType` is `YOUTUBE` or `PASTED`. `categoryIds` has no guaranteed order; match by id.
@@ -125,9 +126,9 @@ One recipe object, or 404.
 ### POST /recipes -> 201
 ```json
 {"name":"Halwa","ingredients":[{"quantity":"250 g","item":"Paneer"}],"steps":["Blend tomato and onion"],
- "categoryIds":["00000000-0000-4000-8000-000000000004"],"sourceType":"PASTED","sourceUrl":null}
+ "categoryIds":["00000000-0000-4000-8000-000000000004"],"sourceType":"PASTED","sourceUrl":null,"thumbnailUrl":null}
 ```
-Required: `name`, `ingredients`, `steps`, `sourceType`. `categoryIds` may be omitted or `[]`.
+Required: `name`, `ingredients`, `steps`, `sourceType`. `categoryIds` may be omitted or `[]`. `sourceUrl` and `thumbnailUrl` are optional (a YouTube fetch returns both, send them back as they came). `PUT` replaces the whole recipe, so an omitted `thumbnailUrl` clears it.
 `categoryIds` may hold starter ids and the user's own ids only; anything else is `400 VALIDATION_FAILED` with `fields.categoryIds`.
 Response: the recipe object.
 

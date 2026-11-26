@@ -60,6 +60,7 @@ import com.tindi.app.ui.components.TindiSearchBar
 import com.tindi.app.ui.components.TindiSheet
 import com.tindi.app.ui.components.TindiTextField
 import com.tindi.app.ui.theme.LocalThemeControl
+import com.tindi.app.domain.thumbnail
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.TindiDims
 import com.tindi.app.ui.theme.TindiType
@@ -250,7 +251,7 @@ fun RecipeCard(recipe: Recipe, categories: List<Category>, onClick: () -> Unit, 
             .semantics(mergeDescendants = true) {},
     ) {
         Box(Modifier.fillMaxWidth().height(TindiDims.thumbCard)) {
-            PlateIllustration(recipeVariant(recipe.id), Modifier.fillMaxSize())
+            RemoteThumbnail(recipe.thumbnail, Modifier.fillMaxSize(), recipeVariant(recipe.id))
             SourceBadge(recipe.sourceType, Modifier.padding(TindiDims.space2))
         }
         Column(Modifier.padding(TindiDims.space3)) {

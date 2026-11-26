@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +30,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tindi.app.AppContainer
+import com.tindi.app.SharedItem
 import com.tindi.app.data.FetchFailure
 import com.tindi.app.data.FetchResult
 import com.tindi.app.data.RecipeDraft
@@ -100,6 +102,17 @@ class AddRecipeViewModel(
         }
     }
 
+    /** A share from another app. A link starts the fetch right away. Plain text opens the paste box. */
+    fun receive(item: SharedItem, onDone: () -> Unit) {
+        job?.cancel()
+        if (item.link != null) {
+            _state.update { AddUiState(link = item.link) }
+            fetch(onDone)
+        } else {
+            _state.update { AddUiState(pasteMode = true, pasted = item.text.orEmpty()) }
+        }
+    }
+
     fun cancel() {
         job?.cancel()
         _state.update { it.copy(phase = AddPhase.Ready) }
@@ -122,6 +135,13 @@ fun AddRecipeScreen(container: AppContainer, onBack: () -> Unit, onUseText: () -
     val vm = appViewModel { AddRecipeViewModel(container.sourceFetcher) { container.draft.set(it) } }
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Tindi.colors
+    val shared by container.shared.item.collectAsStateWithLifecycle()
+    // Something shared from YouTube (or any app): fetch the link, or drop plain text into the paste box.
+    LaunchedEffect(shared) {
+        val item = shared ?: return@LaunchedEffect
+        container.shared.clear()
+        vm.receive(item, onUseText)
+    }
 
     Column(Modifier.fillMaxSize()) {
         Row(

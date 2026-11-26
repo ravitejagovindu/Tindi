@@ -63,3 +63,12 @@ fun ingredientsForStep(step: String, ingredients: List<Ingredient>): List<Ingred
         key.isNotEmpty() && (text.contains(key) || words.any { w -> text.contains(w.removeSuffix("s")) })
     }
 }
+
+private val VIDEO_ID = Regex("(?:v=|youtu[.]be/|/shorts/|/embed/|/live/)([A-Za-z0-9_-]{11})")
+
+/** The picture to show for a recipe: the saved thumbnail, else one built from the video id in its link, else none. */
+val com.tindi.app.data.Recipe.thumbnail: String?
+    get() = thumbnailUrl?.takeIf { it.startsWith("https://") }
+        ?: sourceUrl?.takeIf { sourceType == com.tindi.app.data.SourceType.YouTube }
+            ?.let { VIDEO_ID.find(it)?.groupValues?.get(1) }
+            ?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }

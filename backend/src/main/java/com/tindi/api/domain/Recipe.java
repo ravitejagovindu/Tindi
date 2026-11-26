@@ -31,6 +31,8 @@ public class Recipe {
     private SourceType sourceType;
     @Column(name = "source_url")
     private String sourceUrl;
+    @Column(name = "thumbnail_url")
+    private String thumbnailUrl;
     @Column(name = "created_at")
     private Instant createdAt;
     @Column(name = "updated_at")
@@ -63,6 +65,8 @@ public class Recipe {
     public void setSourceType(SourceType v) { this.sourceType = v; }
     public String getSourceUrl() { return sourceUrl; }
     public void setSourceUrl(String v) { this.sourceUrl = v; }
+    public String getThumbnailUrl() { return thumbnailUrl; }
+    public void setThumbnailUrl(String v) { this.thumbnailUrl = v; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant v) { this.updatedAt = v; }

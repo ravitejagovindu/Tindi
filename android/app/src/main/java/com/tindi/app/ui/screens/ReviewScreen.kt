@@ -121,7 +121,7 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
 
     private fun fromRecipe(r: Recipe) = ReviewUiState(
         name = r.name, categoryIds = r.categoryIds.toSet(), ingredients = r.ingredients, steps = r.steps,
-        sourceType = r.sourceType, sourceUrl = r.sourceUrl,
+        sourceType = r.sourceType, sourceUrl = r.sourceUrl, thumbnailUrl = r.thumbnailUrl,
     )
 
     private fun initial(): ReviewUiState {
@@ -264,6 +264,7 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
                         categoryIds = s.categoryIds.toList(),
                         sourceType = s.sourceType,
                         sourceUrl = s.sourceUrl,
+                        thumbnailUrl = s.thumbnailUrl,
                     )
                     val result = if (editId == null) container.recipes.create(input) else container.recipes.update(editId, input)
                     when (result) {

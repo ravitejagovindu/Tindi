@@ -20,6 +20,8 @@ data class Recipe(
     val categoryIds: List<String>,
     val sourceType: SourceType,
     val sourceUrl: String? = null,
+    /** Address of the video thumbnail (https), or null. Use [Recipe.thumbnail] to show it. */
+    val thumbnailUrl: String? = null,
 )
 
 @Serializable
@@ -39,6 +41,7 @@ data class RecipeInput(
     val categoryIds: List<String>,
     val sourceType: SourceType,
     val sourceUrl: String?,
+    val thumbnailUrl: String? = null,
 )
 
 object Categories {
