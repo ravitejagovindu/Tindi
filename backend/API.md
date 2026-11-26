@@ -28,7 +28,7 @@ Every error has this shape (`fields` only when relevant):
 | 409 | `EMAIL_TAKEN` | `fields.email` |
 | 409 | `CATEGORY_NAME_TAKEN` | `fields.name` |
 | 405 / 500 | `METHOD_NOT_ALLOWED` / `INTERNAL_ERROR` | unexpected |
-| 404/429/502/503 | `NOT_FOUND`, `SOURCE_QUOTA_EXCEEDED`, `SOURCE_UNAVAILABLE`, `SOURCE_NOT_CONFIGURED` | only from `POST /source/fetch`, see below |
+| 404/429/502/503 | `NOT_FOUND`, `SOURCE_QUOTA_EXCEEDED`, `SOURCE_UNAVAILABLE`, `SOURCE_NOT_CONFIGURED` | only from `POST /source/fetch` (YouTube problems), see below |
 
 A malformed body or a bad enum value (e.g. `sourceType`) is `VALIDATION_FAILED`; `fields` may name the path with the message `Invalid value`.
 
@@ -138,9 +138,11 @@ Full replace, same body as POST. `createdAt` is kept, `updatedAt` changes. Error
 ### DELETE /recipes/{id} -> 204
 Errors: 404.
 
-## Source fetch (YouTube)
+## Source fetch and structuring
 
-Needs `Authorization: Bearer <token>`. Uses the official YouTube Data API v3 on the server, with the key from `tindi.youtube-api-key`. The phone never sees the key. Nothing is saved: the app shows the result in the review screen, and the user then saves with `POST /recipes`.
+Both endpoints need `Authorization: Bearer <token>`. Nothing is saved: the app shows the result in the review screen, and the user then saves with `POST /recipes`.
+
+`/source/fetch` uses the official YouTube Data API v3 on the server, with the key from `tindi.youtube-api-key`. The `suggested` recipe in both endpoints comes from Google Gemini (`tindi.gemini-api-key`), with a rule based splitter as fallback. The phone never sees either key.
 
 ### POST /source/fetch -> 200
 ```json
@@ -164,7 +166,9 @@ Accepted links: `youtube.com/watch?v=ID` (also `www.` and `m.`), `youtu.be/ID`, 
     "ingredients": ["250 g paneer", "2 tbsp butter"],
     "steps": ["Melt the butter.", "Add the puree and simmer."],
     "confidence": "HIGH",
-    "foundIn": "DESCRIPTION"
+    "foundIn": "DESCRIPTION",
+    "method": "LLM",
+    "warnings": []
   }
 }
 ```
@@ -173,15 +177,7 @@ Accepted links: `youtube.com/watch?v=ID` (also `www.` and `m.`), `youtu.be/ID`, 
 - `comments` holds up to 5 top comments by relevance (plain text). It is `[]` when comments are disabled or YouTube fails to return them; the request still succeeds. `isPinnedLikely` is a guess: the YouTube API does not say which comment is pinned, so it is `true` when the comment was written by the video's own channel.
 - `description` and `comments` are always returned raw, whatever `suggested` says.
 
-`suggested` comes from a rule based splitter (no AI). It looks for an "ingredients" section ("Ingredients", "What you need", "You will need", "Samagri", "सामग्री") and a method section ("Method", "Steps", "Directions", "Instructions", "Preparation", "Vidhi", "विधि") in the description first, then in each comment, and keeps the one with the most lines. Bullets, numbering and emoji are removed. Items are trimmed to the recipe limits (ingredient 120, step 1000 characters, 100 items).
-
-| `confidence` | meaning |
-|---|---|
-| `HIGH` | at least 2 ingredients and 2 steps found |
-| `LOW` | something found, but only one section or very few lines. Show it, but let the user check it |
-| `NONE` | nothing found. `ingredients` and `steps` are `[]` and `foundIn` is `NONE` |
-
-`foundIn` is `DESCRIPTION`, `COMMENT` or `NONE`. Treat the suggestion as a prefill, not as truth: always let the user edit before saving.
+See [The `suggested` object](#the-suggested-object) for what it holds. A Gemini problem never fails the request: the rules splitter answers instead.
 
 Errors (same error format as everywhere):
 
@@ -196,5 +192,75 @@ Errors (same error format as everywhere):
 
 A bad link is checked first, so it returns `VALIDATION_FAILED` even when the key is missing.
 
+### POST /source/structure -> 200
+For pasted text. No YouTube call and no YouTube key needed.
+```json
+{"text":"Ingredients:\n- 2 eggs\n- salt\nMethod:\n- Beat the eggs.\n- Fry them."}
+```
+```json
+{
+  "suggested": {
+    "ingredients": ["2 eggs", "salt"],
+    "steps": ["Beat the eggs.", "Fry them."],
+    "confidence": "HIGH",
+    "foundIn": "PASTED",
+    "method": "LLM",
+    "warnings": []
+  }
+}
+```
+`text` is required, at most 20000 characters.
+
+Errors: 400 `VALIDATION_FAILED` (`fields.text`), 401 `UNAUTHORIZED`. Gemini problems are not errors.
+
+### The `suggested` object
+
+| field | values |
+|---|---|
+| `ingredients` | strings, at most 100, each at most 120 characters |
+| `steps` | strings in order, at most 100, each at most 1000 characters |
+| `method` | `LLM` (Gemini, checked against the source) or `RULES` (fallback splitter) |
+| `confidence` | `HIGH`, `LOW` or `NONE`, see below |
+| `foundIn` | `DESCRIPTION`, `COMMENT` (fetch), `PASTED` (structure) or `NONE` |
+| `warnings` | short English sentences to show the user, often `[]`. Always `[]` for `RULES` |
+
+| `confidence` | meaning |
+|---|---|
+| `HIGH` | `method` is `LLM`, every item passed the check against the source, and there is no warning |
+| `LOW` | something found, but the user should check it. Every non-empty `RULES` result is `LOW` |
+| `NONE` | nothing found. `ingredients` and `steps` are `[]` and `foundIn` is `NONE` |
+
+Treat the suggestion as a prefill, not as truth: always let the user edit before saving. Item numbers in warnings are 1-based positions in the returned lists. A note that starts with "The recipe may be partial:" is written by the model and is not checked against the source.
+
+### How `suggested` is made
+
+1. **Gemini** (`generateContent`, temperature 0, JSON response schema, one attempt, 20 s deadline). It gets the video title, the description and the top comments as separately labelled sources, or the pasted text as one source. Comment author names are not sent. It is told to reorganise only what is there, keep the language and the quantities as written, and ignore instructions inside the text.
+2. **Grounding check** on the server. Text is compared after lowercasing and removing punctuation and emoji.
+   - An item whose words are mostly not in the source (fewer than half, in any 3 neighbouring lines or sentences) is removed.
+   - An item with some words missing or spelled differently is kept, with a warning.
+   - An item with a number, fraction, number word or unit that is not in the source, or that sits next to something else there, is kept, with a warning.
+   - If removed items plus items with a bad quantity are more than half, the whole Gemini answer is discarded.
+
+   The check compares words, not meaning. It cannot catch a dropped "not", or text that really is in the source but is not part of the recipe.
+3. **Rules fallback**, used when Gemini is not configured, fails, times out, is over quota, blocks the request, answers with invalid JSON, or fails the grounding check. An answer with two empty lists is not a failure: it means "no recipe" (`method` `LLM`, `confidence` `NONE`).
+
+The rules splitter looks for an "ingredients" section ("Ingredients", "What you need", "You will need", "Samagri", "सामग्री") and a method section ("Method", "Steps", "Directions", "Instructions", "Preparation", "Vidhi", "विधि") in the description first, then in each comment (or in the pasted text), and keeps the one with the most lines. Bullets, numbering and emoji are removed.
+
+A request can take about 20 s longer than before when Gemini is slow, so clients should use a read timeout of at least 30 s on both endpoints.
+
+### Logging
+For each suggestion the server logs the video id (or `pasted`), the method, item counts and the fallback reason. Source text and API keys are not logged.
+
 ### Server setup
-In `backend/config/local.properties` (gitignored) add `tindi.youtube-api-key=<your key>` and restart the server. The key is sent to Google in the `X-Goog-Api-Key` header and is never logged or returned. A value that starts with `PASTE` (the placeholder in `local.properties.example`) counts as not set.
+In `backend/config/local.properties` (gitignored) add these and restart the server:
+
+| property | meaning |
+|---|---|
+| `tindi.youtube-api-key` | needed for `/source/fetch` |
+| `tindi.gemini-api-key` | optional. Without it every suggestion uses the rules splitter |
+| `tindi.gemini-model` | optional, default `gemini-3.5-flash-lite` |
+| `tindi.gemini-timeout` | optional, default `20s` |
+
+Keys are sent to Google in request headers and are never logged or returned. A value that starts with `PASTE` (the placeholders in `local.properties.example`) counts as not set.
+
+With a Gemini key, the text above is sent to Google. On the free tier Google may use it to improve its products.

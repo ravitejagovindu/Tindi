@@ -62,8 +62,10 @@ class SourceFetchTest extends ApiTestBase {
         assertEquals(3, s.get("ingredients").size());
         assertEquals("250 g paneer", s.get("ingredients").get(0).asString());
         assertEquals(3, s.get("steps").size());
-        assertEquals("HIGH", s.get("confidence").asString());
+        assertEquals("LOW", s.get("confidence").asString()); // HIGH is reserved for a clean LLM result
         assertEquals("DESCRIPTION", s.get("foundIn").asString());
+        assertEquals("RULES", s.get("method").asString());
+        assertEquals(0, s.get("warnings").size());
     }
 
     @Test
@@ -131,7 +133,8 @@ class SourceFetchTest extends ApiTestBase {
         assertEquals(200, r.status());
         assertEquals(0, r.body().get("comments").size());
         assertEquals("Paneer Butter Masala", r.text("title"));
-        assertEquals("HIGH", r.body().get("suggested").get("confidence").asString());
+        assertEquals("RULES", r.body().get("suggested").get("method").asString());
+        assertEquals(3, r.body().get("suggested").get("steps").size());
     }
 
     @Test
@@ -149,7 +152,8 @@ class SourceFetchTest extends ApiTestBase {
         assertEquals("COMMENT", s.get("foundIn").asString());
         assertEquals(3, s.get("ingredients").size());
         assertEquals(3, s.get("steps").size());
-        assertEquals("HIGH", s.get("confidence").asString());
+        assertEquals("LOW", s.get("confidence").asString());
+        assertEquals("RULES", s.get("method").asString());
         assertEquals(2, r.body().get("comments").size()); // raw comments still returned
     }
 

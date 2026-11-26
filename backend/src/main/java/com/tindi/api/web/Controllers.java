@@ -10,6 +10,8 @@ import com.tindi.api.dto.RecipeDtos.RecipeDto;
 import com.tindi.api.dto.RecipeDtos.RecipeRequest;
 import com.tindi.api.dto.SourceDtos.FetchRequest;
 import com.tindi.api.dto.SourceDtos.FetchResponse;
+import com.tindi.api.dto.SourceDtos.StructureRequest;
+import com.tindi.api.dto.SourceDtos.StructureResponse;
 import com.tindi.api.security.AuthUser;
 import com.tindi.api.security.TokenService;
 import com.tindi.api.service.AuthService;
@@ -167,6 +169,11 @@ public final class Controllers {
         @PostMapping("/fetch")
         public FetchResponse fetch(@Valid @RequestBody FetchRequest req) {
             return service.fetch(req.url());
+        }
+
+        @PostMapping("/structure")
+        public StructureResponse structure(@Valid @RequestBody StructureRequest req) {
+            return service.structure(req.text());
         }
     }
 }
