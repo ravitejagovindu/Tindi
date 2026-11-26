@@ -39,12 +39,14 @@ public class GroundingCheck {
     public record Check(Verdict verdict, Set<Kind> foundIn) {}
 
     /**
-     * The result for a whole recipe. {@code ingredients} and {@code steps} are the items that survive.
+     * The result for a whole recipe. {@code ingredients} and {@code steps} are the items that survive, and
+     * {@code ingredientOrigins} and {@code stepOrigins} give the position each of them had in the input.
      * {@code failed} counts dropped items plus items with an unverified quantity. {@code support} says how
      * many surviving items were found in each kind of source.
      */
-    public record Report(List<String> ingredients, List<String> steps, List<String> warnings, int total, int failed,
-                         int dropped, Map<Kind, Integer> support) {
+    public record Report(List<String> ingredients, List<String> steps, List<Integer> ingredientOrigins,
+                         List<Integer> stepOrigins, List<String> warnings, int total, int failed, int dropped,
+                         Map<Kind, Integer> support) {
         public boolean majorityFailed() {
             return failed * 2 > total;
         }
@@ -119,11 +121,13 @@ public class GroundingCheck {
     /** Checks a whole recipe. Blank items are ignored. */
     public Report review(List<String> ingredients, List<String> steps) {
         Tally tally = new Tally();
-        List<String> keptIngredients = reviewList("ingredient", ingredients, tally);
-        List<String> keptSteps = reviewList("step", steps, tally);
-        return new Report(keptIngredients, keptSteps, List.copyOf(tally.warnings), tally.total, tally.failed,
-                tally.dropped, tally.support);
+        Kept keptIngredients = reviewList("ingredient", ingredients, tally);
+        Kept keptSteps = reviewList("step", steps, tally);
+        return new Report(keptIngredients.items(), keptSteps.items(), keptIngredients.origins(), keptSteps.origins(),
+                List.copyOf(tally.warnings), tally.total, tally.failed, tally.dropped, tally.support);
     }
+
+    private record Kept(List<String> items, List<Integer> origins) {}
 
     private static final class Tally {
         final List<String> warnings = new ArrayList<>();
@@ -133,10 +137,12 @@ public class GroundingCheck {
         int dropped;
     }
 
-    private List<String> reviewList(String label, List<String> items, Tally tally) {
+    private Kept reviewList(String label, List<String> items, Tally tally) {
         List<String> kept = new ArrayList<>();
+        List<Integer> origins = new ArrayList<>();
         int dropped = 0;
-        for (String raw : items) {
+        for (int position = 0; position < items.size(); position++) {
+            String raw = items.get(position);
             String item = raw == null ? "" : raw.strip();
             if (item.isEmpty()) continue;
             tally.total++;
@@ -148,6 +154,7 @@ public class GroundingCheck {
                 continue;
             }
             kept.add(item);
+            origins.add(position);
             c.foundIn().forEach(k -> tally.support.merge(k, 1, Integer::sum));
             // Warnings name the position in the returned list and never repeat the text.
             if (c.verdict() == Verdict.UNVERIFIED_QUANTITY) {
@@ -163,7 +170,7 @@ public class GroundingCheck {
             tally.warnings.add("Removed " + dropped + " " + label + (dropped == 1 ? " that is" : "s that are")
                     + " not in the source text.");
         }
-        return kept;
+        return new Kept(kept, origins);
     }
 
     /** Checks one ingredient or step. */

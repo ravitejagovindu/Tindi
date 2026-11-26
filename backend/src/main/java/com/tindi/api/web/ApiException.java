@@ -20,8 +20,12 @@ public class ApiException extends RuntimeException {
     }
 
     public static ApiException validation(String field, String message) {
+        return validation(Map.of(field, message));
+    }
+
+    public static ApiException validation(Map<String, String> fields) {
         return new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Please fix the highlighted fields",
-                Map.of(field, message));
+                fields);
     }
 
     public HttpStatus status() { return status; }
