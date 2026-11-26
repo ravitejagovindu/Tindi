@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -109,7 +110,7 @@ class CategoriesViewModel(private val container: AppContainer) : ViewModel() {
 }
 
 @Composable
-fun CategoriesScreen(container: AppContainer) {
+fun CategoriesSection(container: AppContainer) {
     val vm = appViewModel { CategoriesViewModel(container) }
     val s by vm.state.collectAsStateWithLifecycle()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -131,117 +132,102 @@ fun CategoriesScreen(container: AppContainer) {
     }
 
     if (s.error != null) {
-        Column(Modifier.fillMaxSize().padding(horizontal = TindiDims.space5, vertical = TindiDims.space4)) {
-            Heading("Categories")
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                ErrorState(s.error.orEmpty(), vm::reload)
-            }
+        Box(Modifier.fillMaxWidth().padding(vertical = TindiDims.space4), contentAlignment = Alignment.Center) {
+            ErrorState(s.error.orEmpty(), vm::reload)
         }
         return
     }
     if (!s.loaded) {
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = TindiDims.space5, vertical = TindiDims.space4),
-            verticalArrangement = Arrangement.spacedBy(TindiDims.space2),
-        ) {
-            Heading("Categories")
-            Spacer(Modifier.height(TindiDims.space3))
-            repeat(5) { Skeleton(Modifier.fillMaxWidth().height(56.dp), RoundedCornerShape(TindiDims.radiusInput)) }
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TindiDims.space2)) {
+            repeat(4) { Skeleton(Modifier.fillMaxWidth().height(56.dp), RoundedCornerShape(TindiDims.radiusInput)) }
         }
         return
     }
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = TindiDims.space5, vertical = TindiDims.space4),
-    ) {
-        item {
-            Heading("Categories")
-            Spacer(Modifier.height(TindiDims.space5))
-            Row(horizontalArrangement = Arrangement.spacedBy(TindiDims.space3)) {
-                TindiTextField(
-                    label = "New category", value = newName,
-                    onValueChange = { newName = it; newError = null },
-                    placeholder = "For example, Tiffin box", error = newError,
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { create() }),
-                )
-                Box(Modifier.padding(top = 22.dp)) {
-                    Box(
-                        Modifier
-                            .size(TindiDims.buttonH)
-                            .clip(RoundedCornerShape(TindiDims.radiusInput))
-                            .background(c.accent, RoundedCornerShape(TindiDims.radiusInput))
-                            .clickable(role = Role.Button, onClick = ::create),
-                        contentAlignment = Alignment.Center,
-                    ) { TIconImage(TIcon.Plus, c.onAccent, "Create category") }
-                }
+    Column(Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(TindiDims.space3)) {
+            TindiTextField(
+                label = "New category", value = newName,
+                onValueChange = { newName = it; newError = null },
+                placeholder = "For example, Tiffin box", error = newError,
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { create() }),
+            )
+            Box(Modifier.padding(top = 22.dp)) {
+                Box(
+                    Modifier
+                        .size(TindiDims.buttonH)
+                        .clip(RoundedCornerShape(TindiDims.radiusInput))
+                        .background(c.accent, RoundedCornerShape(TindiDims.radiusInput))
+                        .clickable(role = Role.Button, onClick = ::create),
+                    contentAlignment = Alignment.Center,
+                ) { TIconImage(TIcon.Plus, c.onAccent, "Create category") }
             }
-            if (s.actionError != null) {
-                Spacer(Modifier.height(TindiDims.space3))
-                ErrorLine(s.actionError.orEmpty())
-            }
-            Spacer(Modifier.height(TindiDims.space6))
-            SectionLabel("Your categories")
-            Spacer(Modifier.height(TindiDims.space2))
         }
+        if (s.actionError != null) {
+            Spacer(Modifier.height(TindiDims.space3))
+            ErrorLine(s.actionError.orEmpty())
+        }
+        Spacer(Modifier.height(TindiDims.space5))
+        SectionLabel("Your categories")
+        Spacer(Modifier.height(TindiDims.space2))
 
         if (s.own.isEmpty()) {
-            item {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(c.chip, RoundedCornerShape(TindiDims.radiusCard))
-                        .padding(TindiDims.space4),
-                    horizontalArrangement = Arrangement.spacedBy(TindiDims.space4),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    PlateIllustration(3, Modifier.size(TindiDims.thumbList).clip(RoundedCornerShape(TindiDims.radiusSm)))
-                    Column(Modifier.weight(1f)) {
-                        Text("No categories of your own yet", style = TindiType.bodyLgBold.copy(color = c.ink))
-                        Text(
-                            "Add one above, like Tiffin box or Sunday special.",
-                            style = TindiType.body.copy(color = c.muted),
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(c.chip, RoundedCornerShape(TindiDims.radiusCard))
+                    .padding(TindiDims.space4),
+                horizontalArrangement = Arrangement.spacedBy(TindiDims.space4),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PlateIllustration(3, Modifier.size(TindiDims.thumbList).clip(RoundedCornerShape(TindiDims.radiusSm)))
+                Column(Modifier.weight(1f)) {
+                    Text("No categories of your own yet", style = TindiType.bodyLgBold.copy(color = c.ink))
+                    Text(
+                        "Add one above, like Tiffin box or Sunday special.",
+                        style = TindiType.body.copy(color = c.muted),
+                    )
+                }
+            }
+        } else {
+            s.own.forEach { cat ->
+                key(cat.id) {
+                    if (editingId == cat.id) {
+                        EditRow(
+                            value = editName, error = editError,
+                            onValueChange = { editName = it; editError = null },
+                            onSave = {
+                                scope.launch {
+                                    val e = vm.rename(cat.id, editName)
+                                    if (e == null) editingId = null else editError = e
+                                }
+                            },
+                            onCancel = { editingId = null },
+                        )
+                    } else {
+                        CategoryRow(
+                            name = cat.name, caption = recipeCount(s.counts[cat.id] ?: 0),
+                            onRename = { editingId = cat.id; editName = cat.name; editError = null },
+                            onDelete = { deleting = cat },
                         )
                     }
                 }
             }
-        } else {
-            items(s.own, key = { it.id }) { cat ->
-                if (editingId == cat.id) {
-                    EditRow(
-                        value = editName, error = editError,
-                        onValueChange = { editName = it; editError = null },
-                        onSave = {
-                            scope.launch {
-                                val e = vm.rename(cat.id, editName)
-                                if (e == null) editingId = null else editError = e
-                            }
-                        },
-                        onCancel = { editingId = null },
-                    )
-                } else {
-                    CategoryRow(
-                        name = cat.name, caption = recipeCount(s.counts[cat.id] ?: 0),
-                        onRename = { editingId = cat.id; editName = cat.name; editError = null },
-                        onDelete = { deleting = cat },
-                    )
-                }
-            }
         }
 
-        item {
-            Spacer(Modifier.height(TindiDims.space6))
-            SectionLabel("Starter set")
-            Text(
-                "These come with Tindi and cannot be renamed or deleted.",
-                style = TindiType.caption.copy(color = c.muted),
-            )
-            Spacer(Modifier.height(TindiDims.space2))
-        }
-        items(s.starter, key = { it.id }) { cat ->
-            CategoryRow(name = cat.name, caption = recipeCount(s.counts[cat.id] ?: 0), onRename = null, onDelete = null)
+        Spacer(Modifier.height(TindiDims.space5))
+        SectionLabel("Starter set")
+        Text(
+            "These come with Tindi and cannot be renamed or deleted.",
+            style = TindiType.caption.copy(color = c.muted),
+        )
+        Spacer(Modifier.height(TindiDims.space2))
+        s.starter.forEach { cat ->
+            key(cat.id) {
+                CategoryRow(name = cat.name, caption = recipeCount(s.counts[cat.id] ?: 0), onRename = null, onDelete = null)
+            }
         }
     }
 

@@ -20,6 +20,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import com.tindi.app.ui.components.IconBtn
+import com.tindi.app.ui.components.TIconImage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
@@ -81,12 +90,13 @@ class ProfileViewModel(private val container: AppContainer) : ViewModel() {
 }
 
 @Composable
-fun ProfileScreen(container: AppContainer) {
+fun ProfileScreen(container: AppContainer, onBack: () -> Unit) {
     val vm = appViewModel { ProfileViewModel(container) }
     val s by vm.state.collectAsStateWithLifecycle()
     val theme = LocalThemeControl.current
     val c = Tindi.colors
     LaunchedEffect(Unit) { vm.reload() }
+    var catsOpen by rememberSaveable { mutableStateOf(false) }
 
     Column(
         Modifier
@@ -95,7 +105,10 @@ fun ProfileScreen(container: AppContainer) {
             .padding(horizontal = TindiDims.space5),
     ) {
         Spacer(Modifier.height(TindiDims.space4))
-        Heading("Profile")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TindiDims.space3)) {
+            IconBtn(TIcon.ArrowLeft, "Back", onBack)
+            Heading("Profile")
+        }
         Spacer(Modifier.height(TindiDims.space6))
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
@@ -121,6 +134,31 @@ fun ProfileScreen(container: AppContainer) {
             Spacer(Modifier.height(TindiDims.space3))
             ErrorLine(s.error.orEmpty())
             TextAction("Try again", vm::reload)
+        }
+        Spacer(Modifier.height(TindiDims.space6))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(c.surface, RoundedCornerShape(TindiDims.radiusCard))
+                .border(1.dp, c.line, RoundedCornerShape(TindiDims.radiusCard)),
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(TindiDims.radiusCard))
+                    .clickable(role = Role.Button, onClickLabel = if (catsOpen) "Collapse categories" else "Expand categories") { catsOpen = !catsOpen }
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = TindiDims.space4),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Categories", style = TindiType.bodyLgBold.copy(color = c.ink), modifier = Modifier.weight(1f))
+                TIconImage(if (catsOpen) TIcon.ChevronUp else TIcon.ChevronDown, c.ink, null)
+            }
+            if (catsOpen) {
+                Box(Modifier.padding(start = TindiDims.space4, end = TindiDims.space4, bottom = TindiDims.space4)) {
+                    CategoriesSection(container)
+                }
+            }
         }
         Spacer(Modifier.height(TindiDims.space6))
         Box(
