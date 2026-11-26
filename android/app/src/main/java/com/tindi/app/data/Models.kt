@@ -71,6 +71,8 @@ data class RecipeDraft(
     val sourceText: String? = null,
     /** YouTube recipes keep what the server found, for the "From the video" panel. */
     val video: VideoInfo? = null,
+    /** How the server made the prefilled lists. Null when they were split on the phone. */
+    val suggestion: SuggestionInfo? = null,
 )
 
 /** The video details Review shows and the helper panel works from. */
@@ -88,4 +90,22 @@ data class SourceComment(val author: String, val text: String, val likeCount: In
 
 enum class Confidence { High, Low, None }
 
-enum class FoundIn { Description, Comment, None }
+enum class FoundIn { Description, Comment, Pasted, None }
+
+/** Who made a suggestion: Gemini, or the server's rule based splitter. */
+enum class Method { Llm, Rules, Unknown }
+
+/** How a suggestion was produced, and what the server wants checked. */
+data class SuggestionInfo(
+    val method: Method,
+    val confidence: Confidence,
+    val warnings: List<String> = emptyList(),
+)
+
+/** The `suggested` object of the source endpoints. */
+data class Suggestion(
+    val ingredients: List<String>,
+    val steps: List<String>,
+    val foundIn: FoundIn,
+    val info: SuggestionInfo,
+)

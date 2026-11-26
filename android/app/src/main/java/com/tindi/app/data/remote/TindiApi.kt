@@ -28,6 +28,7 @@ interface TindiApi {
     @DELETE("categories/{id}") suspend fun deleteCategory(@Path("id") id: String): retrofit2.Response<Unit>
 
     @POST("source/fetch") suspend fun fetchSource(@Body body: FetchRequest): retrofit2.Response<FetchResponseDto>
+    @POST("source/structure") suspend fun structureText(@Body body: StructureRequest): retrofit2.Response<StructureResponseDto>
 
     @GET("recipes") suspend fun recipes(): retrofit2.Response<List<RecipeDto>>
     @GET("recipes/{id}") suspend fun recipe(@Path("id") id: String): retrofit2.Response<RecipeDto>
@@ -50,6 +51,14 @@ class AuthInterceptor(private val store: SessionStore) : Interceptor {
     }
 }
 
+/** Structuring can wait on Gemini for 20 s, so the source endpoints get the longer read timeout API.md asks for. */
+class SourceTimeoutInterceptor : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val slow = chain.request().url.encodedPath.contains("/source/")
+        return (if (slow) chain.withReadTimeout(35, TimeUnit.SECONDS) else chain).proceed(chain.request())
+    }
+}
+
 object ApiFactory {
     fun create(baseUrl: String, store: SessionStore): TindiApi {
         val client = OkHttpClient.Builder()
@@ -57,6 +66,7 @@ object ApiFactory {
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(AuthInterceptor(store))
+            .addInterceptor(SourceTimeoutInterceptor())
             .build()
         val normalized = baseUrl.trim().trimEnd('/') + "/"
         return Retrofit.Builder()

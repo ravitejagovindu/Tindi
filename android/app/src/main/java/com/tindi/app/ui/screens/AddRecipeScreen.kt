@@ -21,7 +21,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,7 +36,10 @@ import com.tindi.app.data.FetchFailure
 import com.tindi.app.data.FetchResult
 import com.tindi.app.data.RecipeDraft
 import com.tindi.app.data.SourceFetcher
+import com.tindi.app.data.StructureResult
+import com.tindi.app.data.TextStructurer
 import com.tindi.app.domain.draftFromPaste
+import com.tindi.app.domain.draftFromStructured
 import com.tindi.app.domain.draftFromVideo
 import com.tindi.app.ui.components.Heading
 import com.tindi.app.ui.components.IconBtn
@@ -68,6 +72,7 @@ data class AddUiState(
 
 class AddRecipeViewModel(
     private val fetcher: SourceFetcher,
+    private val structurer: TextStructurer,
     private val onDraft: (RecipeDraft) -> Unit,
 ) : ViewModel() {
     private val _state = MutableStateFlow(AddUiState())
@@ -76,8 +81,15 @@ class AddRecipeViewModel(
 
     fun setLink(v: String) = _state.update { it.copy(link = v, linkError = null) }
     fun setPasted(v: String) = _state.update { it.copy(pasted = v, pastedError = null) }
-    fun pasteInstead() = _state.update { it.copy(pasteMode = true, phase = AddPhase.Ready, failure = null) }
-    fun backToLink() = _state.update { it.copy(pasteMode = false) }
+    fun pasteInstead() {
+        job?.cancel() // a fetch left running must not jump to Review later
+        _state.update { it.copy(pasteMode = true, phase = AddPhase.Ready, failure = null) }
+    }
+
+    fun backToLink() {
+        job?.cancel()
+        _state.update { it.copy(pasteMode = false, phase = AddPhase.Ready) }
+    }
 
     /** Asks the server for the video, then hands a prefilled draft to Review through [onDone]. */
     fun fetch(onDone: () -> Unit) {
@@ -118,21 +130,39 @@ class AddRecipeViewModel(
         _state.update { it.copy(phase = AddPhase.Ready) }
     }
 
-    /** No network: the pasted text is split on the phone. Returns true when a draft was handed to Review. */
-    fun usePasted(): Boolean {
-        val text = _state.value.pasted
-        if (text.isBlank()) {
+    /**
+     * Asks the server to sort the pasted text, then hands the draft to Review through [onDone].
+     * If the server cannot be used the text is split on the phone, so pasting works offline.
+     */
+    fun usePasted(onDone: () -> Unit) {
+        val s = _state.value
+        if (s.phase == AddPhase.Loading) return
+        val text = s.pasted.trim()
+        if (text.isEmpty()) {
             _state.update { it.copy(pastedError = "Paste the recipe text first.") }
-            return false
+            return
         }
-        onDraft(draftFromPaste(text))
-        return true
+        _state.update { it.copy(phase = AddPhase.Loading, pastedError = null) }
+        job = viewModelScope.launch {
+            val draft = when (val r = structurer.structure(text)) {
+                is StructureResult.Success -> draftFromStructured(text, r.suggestion)
+                StructureResult.Unavailable -> draftFromPaste(text)
+                StructureResult.SignedOut -> null
+            }
+            _state.update { it.copy(phase = AddPhase.Ready) } // so Back from Review finds the form again
+            if (draft != null) {
+                onDraft(draft)
+                onDone()
+            }
+        }
     }
 }
 
 @Composable
 fun AddRecipeScreen(container: AppContainer, onBack: () -> Unit, onUseText: () -> Unit) {
-    val vm = appViewModel { AddRecipeViewModel(container.sourceFetcher) { container.draft.set(it) } }
+    val vm = appViewModel {
+        AddRecipeViewModel(container.sourceFetcher, container.textStructurer) { container.draft.set(it) }
+    }
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Tindi.colors
     val shared by container.shared.item.collectAsStateWithLifecycle()
@@ -159,12 +189,14 @@ fun AddRecipeScreen(container: AppContainer, onBack: () -> Unit, onUseText: () -
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = TindiDims.space5),
         ) {
-            if (s.pasteMode) {
+            if (s.pasteMode && s.phase == AddPhase.Loading) {
+                LoadingNote("Sorting your recipe. This can take a few seconds.")
+            } else if (s.pasteMode) {
                 Text("Paste the recipe text from anywhere.", style = TindiType.body.copy(color = c.muted))
                 Spacer(Modifier.height(TindiDims.space1))
                 Text(
-                    "Lines under an \"Ingredients\" heading and a \"Method\" or \"Steps\" heading are sorted for you. " +
-                        "Without headings, everything goes into Steps.",
+                    "Tindi sorts it into ingredients and steps for you to check. " +
+                        "Offline, it goes by headings such as \"Ingredients\" and \"Method\".",
                     style = TindiType.caption.copy(color = c.muted),
                 )
                 Spacer(Modifier.height(TindiDims.space4))
@@ -192,7 +224,7 @@ fun AddRecipeScreen(container: AppContainer, onBack: () -> Unit, onUseText: () -
                 when (s.phase) {
                     AddPhase.Ready -> Unit
                     AddPhase.Loading -> {
-                        LoadingBlock()
+                        LoadingNote("Getting the video and sorting the recipe. This can take a few seconds.")
                         Spacer(Modifier.height(TindiDims.space4))
                         SecondaryButton("Cancel", vm::cancel, icon = TIcon.Close)
                     }
@@ -231,8 +263,10 @@ fun AddRecipeScreen(container: AppContainer, onBack: () -> Unit, onUseText: () -
                     Modifier.padding(horizontal = TindiDims.space5, vertical = TindiDims.space3),
                     verticalArrangement = Arrangement.spacedBy(TindiDims.space2),
                 ) {
-                    if (s.pasteMode) {
-                        PrimaryButton("Use this text", onClick = { if (vm.usePasted()) onUseText() }, icon = TIcon.ArrowRight)
+                    if (s.pasteMode && s.phase == AddPhase.Loading) {
+                        SecondaryButton("Cancel", vm::cancel, icon = TIcon.Close)
+                    } else if (s.pasteMode) {
+                        PrimaryButton("Use this text", onClick = { vm.usePasted(onUseText) }, icon = TIcon.ArrowRight)
                         SecondaryButton("Use a YouTube link instead", vm::backToLink)
                     } else {
                         SecondaryButton("Paste text instead", vm::pasteInstead, icon = TIcon.Pen)
@@ -243,9 +277,15 @@ fun AddRecipeScreen(container: AppContainer, onBack: () -> Unit, onUseText: () -
     }
 }
 
+/** What is happening, then placeholder blocks. The sentence is announced by screen readers. */
 @Composable
-private fun LoadingBlock() {
-    Column(Modifier.fillMaxWidth().semantics { contentDescription = "Getting the video" }) {
+private fun LoadingNote(message: String) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            message, style = TindiType.body.copy(color = Tindi.colors.muted),
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        Spacer(Modifier.height(TindiDims.space4))
         Skeleton(Modifier.fillMaxWidth().height(TindiDims.thumbList + 24.dp), RoundedCornerShape(TindiDims.radiusCard))
         Spacer(Modifier.height(TindiDims.space4))
         repeat(4) {

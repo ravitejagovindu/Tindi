@@ -21,11 +21,6 @@ enum class TIcon(private val path: String) {
     ArrowLeft("M19 12H5 M12 19l-7 -7 7 -7"),
     ArrowRight("M5 12h14 M12 5l7 7 -7 7"),
     Close("M18 6L6 18 M6 6l12 12"),
-    Moon("M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"),
-    Sun(
-        "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0 -8 M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 " +
-            "M2 12h2 M20 12h2 M4.9 19.1l1.4 -1.4 M17.7 6.3l1.4 -1.4",
-    ),
     Library("M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"),
     Grid("M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z"),
     User("M20 21v-2a4 4 0 0 0 -4 -4H8a4 4 0 0 0 -4 4v2 M12 7a4 4 0 1 0 0 8a4 4 0 1 0 0 -8"),
@@ -42,7 +37,8 @@ enum class TIcon(private val path: String) {
     External("M18 13v6a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V8a2 2 0 0 1 2 -2h6 M15 3h6v6 M10 14L21 3"),
     Logout("M9 21H5a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h4 M16 17l5 -5 -5 -5 M21 12H9"),
     Alert("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0 -18 M12 8v5 M12 16.5v0.5"),
-    Pen("M4 20h4L19 9l-4 -4L4 16z");
+    Pen("M4 20h4L19 9l-4 -4L4 16z"),
+    Warning("M12 3.5L2.5 20h19z M12 10v4.5 M12 17v0.5");
 
     val vector: ImageVector by lazy {
         ImageVector.Builder(

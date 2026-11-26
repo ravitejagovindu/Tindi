@@ -15,6 +15,8 @@ import com.tindi.app.data.ApiSourceFetcher
 import com.tindi.app.data.RecipeDraft
 import com.tindi.app.data.RecipeRepository
 import com.tindi.app.data.SourceFetcher
+import com.tindi.app.data.ApiTextStructurer
+import com.tindi.app.data.TextStructurer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +33,7 @@ class AppContainer(context: Context) {
     val recipes: RecipeRepository = ApiRecipeRepository(api, sessionStore, scope)
     val categories: CategoryRepository = ApiCategoryRepository(api, sessionStore, recipes, scope)
     val sourceFetcher: SourceFetcher = ApiSourceFetcher(api)
+    val textStructurer: TextStructurer = ApiTextStructurer(api)
 
     val themePrefs = ThemePrefs(context)
     val draft = DraftHolder()

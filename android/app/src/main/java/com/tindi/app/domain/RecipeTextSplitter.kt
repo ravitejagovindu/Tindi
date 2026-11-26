@@ -4,6 +4,8 @@ import com.tindi.app.data.Confidence
 import com.tindi.app.data.Ingredient
 import com.tindi.app.data.RecipeDraft
 import com.tindi.app.data.SourceType
+import com.tindi.app.data.Suggestion
+import com.tindi.app.data.SuggestionInfo
 import com.tindi.app.data.VideoInfo
 import com.tindi.app.data.VideoSource
 
@@ -167,9 +169,20 @@ fun draftFromVideo(src: VideoSource) = RecipeDraft(
     ingredients = src.suggestedIngredients.map(RecipeTextSplitter::parseIngredient),
     steps = src.suggestedSteps,
     video = VideoInfo(src.title, src.channel, src.thumbnailUrl, src.description, src.comments, src.confidence, src.foundIn),
+    suggestion = SuggestionInfo(src.method, src.confidence, src.warnings),
 )
 
-/** Builds the Review draft for pasted text, with no network call. */
+/** Builds the Review draft for pasted text the server sorted. The lists may be empty: the user fills them in. */
+fun draftFromStructured(text: String, s: Suggestion) = RecipeDraft(
+    sourceType = SourceType.Pasted,
+    sourceUrl = null,
+    ingredients = s.ingredients.map(RecipeTextSplitter::parseIngredient),
+    steps = s.steps,
+    sourceText = text.trim(),
+    suggestion = s.info,
+)
+
+/** Builds the Review draft for pasted text with no network call, for when the server cannot be used. */
 fun draftFromPaste(text: String): RecipeDraft {
     val (ingredients, steps) = RecipeTextSplitter.forPaste(text)
     return RecipeDraft(
@@ -181,7 +194,5 @@ fun draftFromPaste(text: String): RecipeDraft {
     )
 }
 
-/** The helper panel's note applies when the server was not confident. */
-val VideoInfo.needsNote: Boolean get() = confidence != Confidence.High
-
-const val LOW_CONFIDENCE_NOTE = "Couldn't find the recipe automatically. Check the text below and copy what you need."
+/** The "From the video" panel starts open when the server was not confident. */
+val VideoInfo.needsHelp: Boolean get() = confidence != Confidence.High

@@ -83,6 +83,8 @@ data class VideoSource(
     val suggestedSteps: List<String>,
     val confidence: Confidence,
     val foundIn: FoundIn,
+    val method: Method = Method.Unknown,
+    val warnings: List<String> = emptyList(),
 )
 
 /** Why a fetch failed. Each one has a message for the user in [FetchFailure.message]. */
@@ -100,6 +102,21 @@ sealed interface FetchResult {
     /** Not a YouTube link (Instagram and so on). No network call was needed to know. */
     data object NotYouTube : FetchResult
     data class Failed(val reason: FetchFailure) : FetchResult
+}
+
+sealed interface StructureResult {
+    data class Success(val suggestion: Suggestion) : StructureResult
+
+    /** The server could not be asked or gave no usable answer. The phone splits the text itself. */
+    data object Unavailable : StructureResult
+
+    /** The session ended, so the app is going back to log in. */
+    data object SignedOut : StructureResult
+}
+
+/** Sorts pasted text into ingredients and steps (POST /source/structure). */
+interface TextStructurer {
+    suspend fun structure(text: String): StructureResult
 }
 
 /** Turns a link into a video's text. The real one asks the Tindi server, which asks YouTube. */

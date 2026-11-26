@@ -55,11 +55,9 @@ import com.tindi.app.ui.components.Skeleton
 import com.tindi.app.ui.components.SourceBadge
 import com.tindi.app.ui.components.StateBlock
 import com.tindi.app.ui.components.TIcon
-import com.tindi.app.ui.components.ThemeToggle
 import com.tindi.app.ui.components.TindiSearchBar
 import com.tindi.app.ui.components.TindiSheet
 import com.tindi.app.ui.components.TindiTextField
-import com.tindi.app.ui.theme.LocalThemeControl
 import com.tindi.app.domain.thumbnail
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.TindiDims
