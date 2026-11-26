@@ -6,6 +6,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -30,6 +31,7 @@ public class GeminiClient {
     private static final Logger log = LoggerFactory.getLogger(GeminiClient.class);
     private static final Pattern MODEL_NAME = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]*");
     private static final Pattern ERROR_STATUS = Pattern.compile("[A-Z_]{1,40}");
+    private static final Pattern GEMINI_3_FLASH = Pattern.compile("gemini-3(\\.\\d+)?-flash(-.*)?");
     static final String DEFAULT_MODEL = "gemini-3.5-flash-lite";
 
     /** Why there is no usable answer. The reason is a fixed code that is safe to log. */
@@ -81,12 +83,15 @@ public class GeminiClient {
         if (!configured()) throw new Failure("NOT_CONFIGURED");
         if (!MODEL_NAME.matcher(model).matches()) throw new Failure("BAD_MODEL_NAME");
 
+        Map<String, Object> config = new HashMap<>();
+        config.put("temperature", 0);
+        config.put("responseFormat", Map.of("text", Map.of("mimeType", "APPLICATION_JSON", "schema", schema)));
+        Map<String, Object> thinking = leastThinking(model);
+        if (!thinking.isEmpty()) config.put("thinkingConfig", thinking);
         Map<String, Object> body = Map.of(
                 "systemInstruction", Map.of("parts", List.of(Map.of("text", systemInstruction))),
                 "contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", userText)))),
-                "generationConfig", Map.of(
-                        "temperature", 0,
-                        "responseFormat", Map.of("text", Map.of("mimeType", "APPLICATION_JSON", "schema", schema))));
+                "generationConfig", config);
 
         HttpResponse<String> res = send(json.writeValueAsString(body));
         int status = res.statusCode();
@@ -97,6 +102,19 @@ public class GeminiClient {
             throw new Failure("HTTP_" + status);
         }
         return answerText(res.body());
+    }
+
+    /**
+     * Structuring needs no reasoning, and thinking tokens are billed as output. This is the lowest setting each
+     * model family accepts: Gemini 3 Flash and Flash-Lite cannot switch thinking off, "minimal" is their floor;
+     * Gemini 2.5 Flash can. Other models get nothing, because a setting they do not accept fails the request.
+     *
+     * @see <a href="https://ai.google.dev/gemini-api/docs/thinking">Gemini thinking</a>
+     */
+    private static Map<String, Object> leastThinking(String model) {
+        if (GEMINI_3_FLASH.matcher(model).matches()) return Map.of("thinkingLevel", "MINIMAL");
+        if (model.startsWith("gemini-2.5-flash")) return Map.of("thinkingBudget", 0);
+        return Map.of();
     }
 
     private HttpResponse<String> send(String body) {

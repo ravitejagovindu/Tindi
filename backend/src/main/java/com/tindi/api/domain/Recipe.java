@@ -26,6 +26,9 @@ public class Recipe {
     private String name;
     private String ingredients;
     private String steps;
+    /** JSON list parallel to {@code steps}, or null. */
+    @Column(name = "step_details")
+    private String stepDetails;
     @Enumerated(EnumType.STRING)
     @Column(name = "source_type")
     private SourceType sourceType;
@@ -61,6 +64,8 @@ public class Recipe {
     public void setIngredients(String v) { this.ingredients = v; }
     public String getSteps() { return steps; }
     public void setSteps(String v) { this.steps = v; }
+    public String getStepDetails() { return stepDetails; }
+    public void setStepDetails(String v) { this.stepDetails = v; }
     public SourceType getSourceType() { return sourceType; }
     public void setSourceType(SourceType v) { this.sourceType = v; }
     public String getSourceUrl() { return sourceUrl; }

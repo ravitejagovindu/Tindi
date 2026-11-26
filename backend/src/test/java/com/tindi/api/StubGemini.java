@@ -61,6 +61,12 @@ public final class StubGemini {
                 Map.of("ingredients", ingredients, "steps", steps, "source", source, "note", note)));
     }
 
+    /** A successful reply whose steps are objects with labels. Each step map is sent exactly as given. */
+    public void labelled(List<String> ingredients, List<? extends Map<String, ?>> steps) {
+        answerText(JSON.writeValueAsString(
+                Map.of("ingredients", ingredients, "steps", steps, "source", "PASTED", "note", "")));
+    }
+
     /** A successful reply whose answer text is exactly this. */
     public void answerText(String text) {
         raw(200, JSON.writeValueAsString(Map.of("candidates", List.of(Map.of(

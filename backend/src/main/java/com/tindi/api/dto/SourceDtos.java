@@ -1,5 +1,6 @@
 package com.tindi.api.dto;
 
+import com.tindi.api.dto.RecipeDtos.StepDetailDto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -16,8 +17,9 @@ public final class SourceDtos {
 
     public record CommentDto(String author, String text, int likeCount, boolean isPinnedLikely) {}
 
-    public record SuggestedDto(List<String> ingredients, List<String> steps, String confidence, String foundIn,
-                               String method, List<String> warnings) {}
+    /** {@code stepDetails} is parallel to {@code steps}, or null when there is none. */
+    public record SuggestedDto(List<String> ingredients, List<String> steps, List<StepDetailDto> stepDetails,
+                               String confidence, String foundIn, String method, List<String> warnings) {}
 
     public record StructureRequest(
             @NotBlank(message = "Paste the recipe text") @Size(max = 20000, message = "That text is too long") String text) {}

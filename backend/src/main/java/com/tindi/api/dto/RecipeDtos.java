@@ -22,6 +22,23 @@ public final class RecipeDtos {
         }
     }
 
+    /**
+     * Labels for one step. A list of these is parallel to {@code steps}. The illustration and the range of the
+     * indexes depend on the rest of the recipe and are checked by the service.
+     */
+    public record StepDetailDto(
+            @Size(max = StepDetailDto.MAX_NAME, message = "Use 14 characters or fewer") String name,
+            @Size(max = 100, message = "Use 100 ingredients or fewer")
+            List<@NotNull(message = "Enter an ingredient position") Integer> ingredientIndexes,
+            String illustration) {
+        public static final int MAX_NAME = 14;
+
+        public StepDetailDto {
+            name = name == null ? "" : name.trim();
+            ingredientIndexes = ingredientIndexes == null ? List.of() : ingredientIndexes;
+        }
+    }
+
     public record RecipeRequest(
             @NotBlank(message = "Enter a name") @Size(max = 120, message = "Use 120 characters or fewer") String name,
             @NotNull(message = "Ingredients are required") @Size(max = 100, message = "Use 100 ingredients or fewer")
@@ -29,6 +46,8 @@ public final class RecipeDtos {
             @NotNull(message = "Steps are required") @Size(max = 100, message = "Use 100 steps or fewer")
             List<@NotBlank(message = "Enter a step") @Size(max = 1000, message = "Use 1000 characters or fewer")
             String> steps,
+            @Size(max = 100, message = "Use 100 steps or fewer")
+            List<@NotNull(message = "Enter the step details") @Valid StepDetailDto> stepDetails,
             List<String> categoryIds,
             @NotNull(message = "Choose a source type") SourceType sourceType,
             @Size(max = 2048, message = "Use 2048 characters or fewer") String sourceUrl,
@@ -44,6 +63,6 @@ public final class RecipeDtos {
     }
 
     public record RecipeDto(String id, String name, List<IngredientDto> ingredients, List<String> steps,
-                            List<String> categoryIds, SourceType sourceType, String sourceUrl, String thumbnailUrl,
-                            Instant createdAt, Instant updatedAt) {}
+                            List<StepDetailDto> stepDetails, List<String> categoryIds, SourceType sourceType,
+                            String sourceUrl, String thumbnailUrl, Instant createdAt, Instant updatedAt) {}
 }
