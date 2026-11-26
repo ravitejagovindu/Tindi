@@ -1,5 +1,6 @@
 package com.tindi.app
 
+import androidx.lifecycle.viewModelScope
 import com.tindi.app.data.ApiTextStructurer
 import com.tindi.app.data.Confidence
 import com.tindi.app.data.FetchResult
@@ -18,7 +19,7 @@ import com.tindi.app.ui.screens.AddRecipeViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -69,7 +70,9 @@ class PasteFlowTest {
         vm.pasteInstead()
         vm.setPasted(pasted)
         vm.usePasted { opened++ }
-        withTimeout(20_000) { vm.state.first { it.phase == AddPhase.Ready } }
+        // Wait for the whole job: the screen leaves Loading just before the draft is handed over.
+        withTimeout(20_000) { vm.viewModelScope.coroutineContext.job.children.toList().forEach { it.join() } }
+        assertEquals(AddPhase.Ready, vm.state.value.phase)
         vm
     }
 

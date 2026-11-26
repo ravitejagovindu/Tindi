@@ -60,10 +60,8 @@ import com.tindi.app.ui.components.SourceBadge
 import com.tindi.app.ui.components.StateBlock
 import com.tindi.app.ui.components.TIcon
 import com.tindi.app.ui.components.TIconImage
-import com.tindi.app.ui.components.ThemeToggle
 import com.tindi.app.ui.components.TindiTabs
 import com.tindi.app.ui.components.TindiSheet
-import com.tindi.app.ui.theme.LocalThemeControl
 import com.tindi.app.domain.thumbnail
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.TindiDims
@@ -144,7 +142,6 @@ fun RecipeScreen(
 ) {
     val vm = appViewModel(key = "recipe-$id") { RecipeViewModel(container, id) }
     val s by vm.state.collectAsStateWithLifecycle()
-    val theme = LocalThemeControl.current
     val c = Tindi.colors
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -198,7 +195,6 @@ fun RecipeScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(TindiDims.space2)) {
                         IconBtn(TIcon.Edit, "Edit recipe", onEdit)
                         IconBtn(TIcon.Trash, "Delete recipe", { vm.clearDeleteError(); confirmDelete = true })
-                        ThemeToggle(theme.isDark, theme.toggle)
                     }
                 }
                 SourceBadge(

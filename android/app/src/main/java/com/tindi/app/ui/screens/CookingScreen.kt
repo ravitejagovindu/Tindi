@@ -40,8 +40,6 @@ import com.tindi.app.ui.components.IconBtn
 import com.tindi.app.ui.components.PrimaryButton
 import com.tindi.app.ui.components.SecondaryButton
 import com.tindi.app.ui.components.TIcon
-import com.tindi.app.ui.components.ThemeToggle
-import com.tindi.app.ui.theme.LocalThemeControl
 import com.tindi.app.ui.theme.Tindi
 import com.tindi.app.ui.theme.TindiDims
 import com.tindi.app.ui.theme.TindiType
@@ -56,7 +54,6 @@ fun CookingScreen(
 ) {
     val vm = appViewModel(key = "recipe-$id") { RecipeViewModel(container, id) }
     val s by vm.state.collectAsStateWithLifecycle()
-    val theme = LocalThemeControl.current
     val c = Tindi.colors
     val recipe = s.recipe ?: return
     var step by rememberSaveable { mutableIntStateOf(0) }
@@ -86,7 +83,7 @@ fun CookingScreen(
                 style = TindiType.titleSm.copy(color = c.ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
                 modifier = Modifier.weight(1f).semantics { heading() },
             )
-            ThemeToggle(theme.isDark, theme.toggle)
+            Spacer(Modifier.size(TindiDims.touchMin)) // balances the close button, so the title stays centred
         }
 
         Spacer(Modifier.height(TindiDims.space4))
