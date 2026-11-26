@@ -4,6 +4,7 @@ import com.tindi.app.data.remote.ApiError
 import com.tindi.app.data.remote.ApiResult
 import com.tindi.app.data.remote.FetchRequest
 import com.tindi.app.data.remote.FetchResponseDto
+import com.tindi.app.data.remote.SuggestedDto
 import com.tindi.app.data.remote.TindiApi
 import com.tindi.app.data.remote.apiCall
 
@@ -18,25 +19,43 @@ fun ApiError.toFetchFailure(): FetchFailure? = when {
     else -> FetchFailure.Other
 }
 
-internal fun FetchResponseDto.toVideoSource() = VideoSource(
+internal fun SuggestedDto.toSuggestion() = Suggestion(
+    ingredients = ingredients,
+    steps = steps,
+    foundIn = when (foundIn.uppercase()) {
+        "DESCRIPTION" -> FoundIn.Description
+        "COMMENT" -> FoundIn.Comment
+        "PASTED" -> FoundIn.Pasted
+        else -> FoundIn.None
+    },
+    info = SuggestionInfo(
+        method = when (method.uppercase()) {
+            "LLM" -> Method.Llm
+            "RULES" -> Method.Rules
+            else -> Method.Unknown
+        },
+        confidence = when (confidence.uppercase()) {
+            "HIGH" -> Confidence.High
+            "LOW" -> Confidence.Low
+            else -> Confidence.None
+        },
+        warnings = warnings,
+    ),
+)
+
+internal fun FetchResponseDto.toVideoSource(s: Suggestion = suggested.toSuggestion()) = VideoSource(
     url = sourceUrl,
     title = title,
     channel = channelName,
     thumbnailUrl = thumbnailUrl,
     description = description,
     comments = comments.map { SourceComment(it.author, it.text, it.likeCount, it.isPinnedLikely) },
-    suggestedIngredients = suggested.ingredients,
-    suggestedSteps = suggested.steps,
-    confidence = when (suggested.confidence.uppercase()) {
-        "HIGH" -> Confidence.High
-        "LOW" -> Confidence.Low
-        else -> Confidence.None
-    },
-    foundIn = when (suggested.foundIn.uppercase()) {
-        "DESCRIPTION" -> FoundIn.Description
-        "COMMENT" -> FoundIn.Comment
-        else -> FoundIn.None
-    },
+    suggestedIngredients = s.ingredients,
+    suggestedSteps = s.steps,
+    confidence = s.info.confidence,
+    foundIn = s.foundIn,
+    method = s.info.method,
+    warnings = s.info.warnings,
 )
 
 /** Asks the Tindi server (which uses the official YouTube Data API). Never throws. */

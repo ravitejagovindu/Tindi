@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -44,7 +45,6 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.tindi.app.data.VideoInfo
-import com.tindi.app.domain.LOW_CONFIDENCE_NOTE
 import com.tindi.app.ui.components.PlateIllustration
 import com.tindi.app.ui.components.TIcon
 import com.tindi.app.ui.components.TIconImage
@@ -108,19 +108,64 @@ fun VideoSummaryCard(channel: String?, thumbnailUrl: String?, link: String?) {
     }
 }
 
-/** Shown when the server could not find the recipe (confidence LOW or NONE). */
+/** How the suggestion was made. Short, and it can be closed. */
 @Composable
-fun LowConfidenceNote(modifier: Modifier = Modifier) {
+fun SuggestionBanner(message: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val c = Tindi.colors
     Row(
         modifier
             .fillMaxWidth()
             .background(c.chip, RoundedCornerShape(TindiDims.radiusInput))
-            .padding(TindiDims.space3),
-        horizontalArrangement = Arrangement.spacedBy(TindiDims.space2),
+            .padding(start = TindiDims.space3),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        TIconImage(TIcon.Alert, c.ink, null, size = 16.dp, modifier = Modifier.padding(top = 2.dp))
-        Text(LOW_CONFIDENCE_NOTE, style = TindiType.body.copy(color = c.ink))
+        TIconImage(TIcon.Alert, c.ink, null, size = 18.dp)
+        Text(
+            message,
+            style = TindiType.caption.copy(color = c.ink),
+            modifier = Modifier.weight(1f).padding(start = TindiDims.space2, top = TindiDims.space2, bottom = TindiDims.space2),
+        )
+        Box(
+            Modifier
+                .size(TindiDims.touchMin)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) { TIconImage(TIcon.Close, c.ink, "Dismiss message", size = 20.dp) }
+    }
+}
+
+/** Collapsed by default. Lists what the server asked the user to check. */
+@Composable
+fun CheckTheseRow(warnings: List<String>, open: Boolean, onToggle: () -> Unit) {
+    val c = Tindi.colors
+    val shape = RoundedCornerShape(TindiDims.radiusCard)
+    Column(Modifier.fillMaxWidth().background(c.chip, shape)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = TindiDims.touchMin)
+                .clip(shape)
+                .clickable(role = Role.Button, onClick = onToggle)
+                .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+                .padding(horizontal = TindiDims.space4),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TIconImage(TIcon.Warning, c.ink, null, size = 18.dp)
+            Spacer(Modifier.size(TindiDims.space2))
+            Text("Check these (${warnings.size})", style = TindiType.label.copy(color = c.ink), modifier = Modifier.weight(1f))
+            Text(if (open) "Hide" else "Show", style = TindiType.caption.copy(color = c.muted))
+            Spacer(Modifier.size(TindiDims.space2))
+            TIconImage(if (open) TIcon.ChevronUp else TIcon.ChevronDown, c.ink, null)
+        }
+        if (open) {
+            Column(
+                Modifier.padding(start = TindiDims.space4, end = TindiDims.space4, bottom = TindiDims.space4),
+                verticalArrangement = Arrangement.spacedBy(TindiDims.space2),
+            ) {
+                warnings.forEach { Text(it, style = TindiType.body.copy(color = c.ink)) }
+            }
+        }
     }
 }
 

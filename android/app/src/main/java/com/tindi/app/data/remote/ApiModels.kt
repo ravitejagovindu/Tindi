@@ -87,7 +87,14 @@ data class SuggestedDto(
     val steps: List<String> = emptyList(),
     val confidence: String = "NONE",
     val foundIn: String = "NONE",
+    val method: String = "",
+    val warnings: List<String> = emptyList(),
 )
+
+@Serializable data class StructureRequest(val text: String)
+
+/** No default: an answer without `suggested` is not usable, and the phone then splits the text itself. */
+@Serializable data class StructureResponseDto(val suggested: SuggestedDto)
 
 @Serializable
 data class FetchResponseDto(

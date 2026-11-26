@@ -5,7 +5,9 @@ import com.tindi.app.data.Confidence
 import com.tindi.app.data.FetchFailure
 import com.tindi.app.data.FetchResult
 import com.tindi.app.data.FoundIn
+import com.tindi.app.data.Method
 import com.tindi.app.data.SourceType
+import com.tindi.app.data.SuggestionInfo
 import com.tindi.app.data.remote.ApiError
 import com.tindi.app.data.remote.ApiFactory
 import com.tindi.app.data.remote.InMemorySessionStore
@@ -106,6 +108,18 @@ class SourceFetcherTest {
         assertEquals(Confidence.None, src.confidence)
         assertEquals(FoundIn.None, src.foundIn)
         assertNull(src.thumbnailUrl)
+    }
+
+    @Test fun methodAndWarningsReachTheDraft() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            ok.replace(
+                """"foundIn":"DESCRIPTION"}""",
+                """"foundIn":"COMMENT","method":"RULES","warnings":["No steps were found."]}""",
+            ),
+        ))
+        val d = draftFromVideo((fetcher.fetch("https://youtu.be/dQw4w9WgXcQ") as FetchResult.Success).source)
+        assertEquals(SuggestionInfo(Method.Rules, Confidence.High, listOf("No steps were found.")), d.suggestion)
+        assertEquals(FoundIn.Comment, d.video!!.foundIn)
     }
 
     @Test fun nonYouTubeLinksNeverTouchTheNetwork() = runBlocking {

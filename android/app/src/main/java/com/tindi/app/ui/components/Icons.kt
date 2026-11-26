@@ -42,7 +42,8 @@ enum class TIcon(private val path: String) {
     External("M18 13v6a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V8a2 2 0 0 1 2 -2h6 M15 3h6v6 M10 14L21 3"),
     Logout("M9 21H5a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2h4 M16 17l5 -5 -5 -5 M21 12H9"),
     Alert("M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0 -18 M12 8v5 M12 16.5v0.5"),
-    Pen("M4 20h4L19 9l-4 -4L4 16z");
+    Pen("M4 20h4L19 9l-4 -4L4 16z"),
+    Warning("M12 3.5L2.5 20h19z M12 10v4.5 M12 17v0.5");
 
     val vector: ImageVector by lazy {
         ImageVector.Builder(

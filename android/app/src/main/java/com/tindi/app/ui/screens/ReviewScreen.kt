@@ -43,14 +43,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tindi.app.AppContainer
 import com.tindi.app.data.Category
+import com.tindi.app.data.Confidence
 import com.tindi.app.data.Ingredient
 import com.tindi.app.data.Recipe
 import com.tindi.app.data.RecipeDraft
 import com.tindi.app.data.RecipeInput
 import com.tindi.app.data.SourceType
 import com.tindi.app.data.VideoInfo
+import com.tindi.app.domain.RecipeList
 import com.tindi.app.domain.RecipeTextSplitter
-import com.tindi.app.domain.needsNote
+import com.tindi.app.domain.ReviewHints
+import com.tindi.app.domain.needsHelp
 import com.tindi.app.data.remote.ApiError
 import com.tindi.app.data.remote.ApiResult
 import com.tindi.app.ui.components.CategoryChip
@@ -98,6 +101,8 @@ data class ReviewUiState(
     val stepText: String = "",
     val nameError: String? = null,
     val saveError: String? = null,
+    /** The server's banner and warnings. Stays empty when editing a saved recipe. */
+    val hints: ReviewHints = ReviewHints(),
 )
 
 /** Create mode (editId null) reads the draft from Add recipe. Edit mode starts from a saved recipe. */
@@ -110,6 +115,10 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
 
     /** What the server found for a YouTube link. Drives the "From the video" panel. */
     val video: VideoInfo? = if (isEdit) null else container.draft.draft.value?.video
+
+    /** The server found no recipe, so the source text is what the user works from. */
+    val nothingFound: Boolean =
+        !isEdit && container.draft.draft.value?.suggestion?.confidence == Confidence.None
 
     var saved = false
         private set
@@ -128,6 +137,7 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         if (editId == null) {
             val d = container.draft.draft.value
             return ReviewUiState(
+                hints = ReviewHints.from(d?.suggestion, d?.ingredients?.size ?: 0, d?.steps?.size ?: 0),
                 name = d?.title.orEmpty(),
                 ingredients = d?.ingredients.orEmpty(),
                 steps = d?.steps.orEmpty(),
@@ -191,18 +201,30 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         if (it.item.isBlank()) it
         else it.copy(
             ingredients = it.ingredients + Ingredient(it.qty.trim(), it.item.trim()),
-            qty = "", item = "", saveError = null,
+            qty = "", item = "", saveError = null, hints = it.hints.added(RecipeList.Ingredients),
         )
     }
 
-    fun removeIngredient(i: Int) = _state.update { it.copy(ingredients = it.ingredients.filterIndexed { n, _ -> n != i }) }
+    fun removeIngredient(i: Int) = _state.update {
+        it.copy(
+            ingredients = it.ingredients.filterIndexed { n, _ -> n != i },
+            hints = it.hints.removed(RecipeList.Ingredients, i),
+        )
+    }
 
     fun addStep() = _state.update {
         if (it.stepText.isBlank()) it
-        else it.copy(steps = it.steps + it.stepText.trim(), stepText = "", saveError = null)
+        else it.copy(
+            steps = it.steps + it.stepText.trim(), stepText = "", saveError = null,
+            hints = it.hints.added(RecipeList.Steps),
+        )
     }
 
-    fun removeStep(i: Int) = _state.update { it.copy(steps = it.steps.filterIndexed { n, _ -> n != i }) }
+    fun removeStep(i: Int) = _state.update {
+        it.copy(steps = it.steps.filterIndexed { n, _ -> n != i }, hints = it.hints.removed(RecipeList.Steps, i))
+    }
+
+    fun dismissBanner() = _state.update { it.copy(hints = it.hints.dismiss()) }
 
     /** Replaces the ingredient list with the lines of [text] (its ingredients section if it has one). */
     fun useAsIngredients(text: String) {
@@ -211,6 +233,7 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
             if (lines.isEmpty()) it.copy(notice = "Nothing to use in that text.")
             else it.copy(
                 ingredients = lines.map(RecipeTextSplitter::parseIngredient), saveError = null,
+                hints = it.hints.replaced(RecipeList.Ingredients),
                 notice = "Ingredients filled with ${lines.size} lines. Check them in the Ingredients tab.",
             )
         }
@@ -222,7 +245,7 @@ class ReviewViewModel(private val container: AppContainer, private val editId: S
         _state.update {
             if (lines.isEmpty()) it.copy(notice = "Nothing to use in that text.")
             else it.copy(
-                steps = lines, saveError = null,
+                steps = lines, saveError = null, hints = it.hints.replaced(RecipeList.Steps),
                 notice = "Steps filled with ${lines.size} lines. Check them in the Steps tab.",
             )
         }
@@ -290,7 +313,8 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
     val draft by vm.draft.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val c = Tindi.colors
-    var helperOpen by rememberSaveable { mutableStateOf(vm.video?.needsNote == true) }
+    var helperOpen by rememberSaveable { mutableStateOf(vm.video?.needsHelp == true) }
+    var warningsOpen by rememberSaveable { mutableStateOf(false) }
     var showNewCategory by remember { mutableStateOf(false) }
 
     // The draft only lives in memory. If it is gone (process death, logout), go back to Add recipe.
@@ -319,6 +343,12 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
             }
             return@Column
         }
+        s.hints.banner(s.sourceType)?.let { message ->
+            SuggestionBanner(
+                message, vm::dismissBanner,
+                Modifier.padding(start = TindiDims.space5, end = TindiDims.space5, bottom = TindiDims.space2),
+            )
+        }
         Box(Modifier.padding(horizontal = TindiDims.space5)) {
             TindiTabs(listOf("Details", "Ingredients", "Steps", "Category"), s.tab, vm::setTab)
         }
@@ -336,10 +366,6 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     if (vm.video != null) {
                         VideoSummaryCard(s.channel, s.thumbnailUrl, s.sourceUrl)
                         Spacer(Modifier.height(TindiDims.space5))
-                        if (vm.video.needsNote) {
-                            LowConfidenceNote()
-                            Spacer(Modifier.height(TindiDims.space5))
-                        }
                     }
                     TindiTextField(
                         label = "Recipe name", value = s.name, onValueChange = vm::setName, error = s.nameError,
@@ -353,10 +379,14 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     )
                 }
                 1 -> {
+                    WarningsSection(s.hints, warningsOpen) { warningsOpen = !warningsOpen }
                     SourceHelp(vm, s.notice, helperOpen, { helperOpen = !helperOpen }, "ingredients")
                     Spacer(Modifier.height(TindiDims.space4))
+                    val flagged = s.hints.flagged(RecipeList.Ingredients)
                     s.ingredients.forEachIndexed { i, ing ->
-                        ListRow(ing.display, "Remove ingredient ${ing.display}") { vm.removeIngredient(i) }
+                        ListRow(ing.display, "Remove ingredient ${ing.display}", flagged = i in flagged) {
+                            vm.removeIngredient(i)
+                        }
                     }
                     if (s.ingredients.isNotEmpty()) Spacer(Modifier.height(TindiDims.space3))
                     Row(horizontalArrangement = Arrangement.spacedBy(TindiDims.space2)) {
@@ -375,10 +405,12 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
                     SecondaryButton("Add ingredient", vm::addIngredient, icon = TIcon.Plus, enabled = s.item.isNotBlank())
                 }
                 2 -> {
+                    WarningsSection(s.hints, warningsOpen) { warningsOpen = !warningsOpen }
                     SourceHelp(vm, s.notice, helperOpen, { helperOpen = !helperOpen }, "steps")
                     Spacer(Modifier.height(TindiDims.space4))
+                    val flagged = s.hints.flagged(RecipeList.Steps)
                     s.steps.forEachIndexed { i, step ->
-                        ListRow("${i + 1}. $step", "Remove step ${i + 1}") { vm.removeStep(i) }
+                        ListRow("${i + 1}. $step", "Remove step ${i + 1}", flagged = i in flagged) { vm.removeStep(i) }
                     }
                     if (s.steps.isNotEmpty()) Spacer(Modifier.height(TindiDims.space3))
                     TindiTextField(
@@ -436,8 +468,17 @@ fun ReviewScreen(container: AppContainer, editId: String? = null, onBack: () -> 
     }
 }
 
+/** The "Check these" row, when the server sent warnings. */
 @Composable
-private fun ListRow(text: String, removeLabel: String, onRemove: () -> Unit) {
+private fun WarningsSection(hints: ReviewHints, open: Boolean, onToggle: () -> Unit) {
+    if (hints.warnings.isEmpty()) return
+    CheckTheseRow(hints.warnings.map { it.text }, open, onToggle)
+    Spacer(Modifier.height(TindiDims.space3))
+}
+
+/** [flagged] rows are ones the server asked the user to check. */
+@Composable
+private fun ListRow(text: String, removeLabel: String, flagged: Boolean = false, onRemove: () -> Unit) {
     val c = Tindi.colors
     val shape = RoundedCornerShape(TindiDims.radiusInput)
     Row(
@@ -449,6 +490,10 @@ private fun ListRow(text: String, removeLabel: String, onRemove: () -> Unit) {
             .padding(start = TindiDims.space4),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (flagged) {
+            TIconImage(TIcon.Warning, c.ink, "Needs checking", size = 18.dp)
+            Spacer(Modifier.size(TindiDims.space2))
+        }
         Text(text, style = TindiType.body.copy(color = c.ink), modifier = Modifier.weight(1f).padding(vertical = TindiDims.space3))
         Box(
             Modifier
@@ -460,12 +505,12 @@ private fun ListRow(text: String, removeLabel: String, onRemove: () -> Unit) {
     }
 }
 
-/** Collapsed by default. Tap to expand. The text is selectable so the user can copy lines out of it. */
+/** Tap to expand. Starts open when there is nothing else to work from. The text is selectable for copying. */
 @Composable
-private fun SourceTextCard(text: String, forWhat: String) {
+private fun SourceTextCard(text: String, forWhat: String, startOpen: Boolean) {
     val c = Tindi.colors
     val shape = RoundedCornerShape(TindiDims.radiusCard)
-    var open by rememberSaveable(forWhat) { mutableStateOf(false) }
+    var open by rememberSaveable(forWhat) { mutableStateOf(startOpen) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -512,12 +557,8 @@ private fun SourceHelp(
 ) {
     val video = vm.video
     if (video != null) {
-        if (video.needsNote) {
-            LowConfidenceNote()
-            Spacer(Modifier.height(TindiDims.space3))
-        }
         VideoHelperPanel(video, open, onToggle, notice, vm::useAsIngredients, vm::useAsSteps)
     } else {
-        vm.sourceText?.let { SourceTextCard(it, forWhat) }
+        vm.sourceText?.let { SourceTextCard(it, forWhat, startOpen = vm.nothingFound) }
     }
 }
